@@ -137,19 +137,34 @@ class InputError(Exception):
 # ======================================================================
 
 def read_vtu(path):
-    """Knoten, Spannungstensor je Knoten und Tetraeder (Eckknoten) einer VTU-Datei."""
-    import meshio
-    try:
-        mesh = meshio.read(str(path))
-    except Exception as err:
-        raise InputError(f"{path} laesst sich nicht als VTU-Datei lesen ({err}).")
-    tets = [c.data[:, :4] for c in mesh.cells if c.type in ("tetra", "tetra10")]
-    if not tets:
+    """Knoten, Spannungstensor je Knoten und Tetraeder (Eckknoten) einer VTU-Datei.
+
+    Gelesen wird mit VTK selbst, dem Referenzleser des Formats.
+    """
+    from vtkmodules.util.numpy_support import vtk_to_numpy
+    from vtkmodules.vtkCommonCore import vtkObject
+    from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridReader
+    if not Path(path).is_file():
+        raise InputError(f"Die Datei {path} gibt es nicht.")
+    vtkObject.GlobalWarningDisplayOff()     # Fehler meldet die Pruefung unten
+    reader = vtkXMLUnstructuredGridReader()
+    reader.SetFileName(str(path))
+    reader.Update()
+    grid = reader.GetOutput()
+    if grid.GetNumberOfPoints() == 0:
+        raise InputError(f"{path} laesst sich nicht als VTU-Datei lesen "
+                         f"(leer oder beschaedigt). Datei erneut exportieren bzw. hochladen.")
+    # VTK-Zelltypen 10 = Tetraeder, 24 = quadratischer Tetraeder; die ersten
+    # vier Knoten sind in beiden Faellen die Ecken.
+    types = vtk_to_numpy(grid.GetCellTypes())
+    start = vtk_to_numpy(grid.GetCells().GetOffsetsArray())[:-1][np.isin(types, (10, 24))]
+    if len(start) == 0:
         raise InputError(
-            "Die Datei enthaelt kein Tetraedernetz (gefunden: "
-            + ", ".join(c.type for c in mesh.cells) + "). Das FEM-Modell "
-            "muss mit Tetraedern vernetzt sein, z. B. C3D4 oder C3D10 in CalculiX.")
-    data = mesh.point_data
+            f"Die Datei enthaelt kein Tetraedernetz (VTK-Zelltypen {sorted(set(types.tolist()))}). "
+            "Das FEM-Modell muss mit Tetraedern vernetzt sein, z. B. C3D4 oder C3D10 in CalculiX.")
+    tets = vtk_to_numpy(grid.GetCells().GetConnectivityArray())[start[:, None] + np.arange(4)]
+    pd = grid.GetPointData()
+    data = {pd.GetArrayName(i): vtk_to_numpy(pd.GetArray(i)) for i in range(pd.GetNumberOfArrays())}
     if all(n in data for n in STRESS_FIELDS):
         comp = np.column_stack([data[n] for n in STRESS_FIELDS])
     else:
@@ -167,7 +182,7 @@ def read_vtu(path):
     sigma = np.empty((len(comp), 3, 3))
     for (i, j), c in zip(((0, 0), (1, 1), (2, 2), (0, 1), (1, 2), (0, 2)), comp.T):
         sigma[:, i, j] = sigma[:, j, i] = c
-    return np.asarray(mesh.points, dtype=float), sigma, np.vstack(tets)
+    return vtk_to_numpy(grid.GetPoints().GetData()).astype(float), sigma, tets
 
 
 def hull_triangles(tets):

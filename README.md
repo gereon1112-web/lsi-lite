@@ -18,7 +18,7 @@ Du brauchst nur ein Google-Konto und deine `.vtu`-Datei.
    <https://colab.research.google.com/github/gereon1112-web/lsi-lite/blob/main/LSI_lite.ipynb>
    (oder in Colab *Datei → Notebook öffnen → GitHub*, `gereon1112-web/lsi-lite` eingeben).
 2. **Zelle 1 „Einrichten"** mit ▶ starten. Beim ersten Mal fragt Colab, ob du dem
-   Notebook vertraust: *Trotzdem ausführen*. Nach etwa 20 Sekunden steht „Bereit."
+   Notebook vertraust: *Trotzdem ausführen*. Nach etwa 30 Sekunden steht „Bereit."
 3. **Zelle 2 „Datei hochladen"** starten, *Dateien auswählen*, deine `.vtu` wählen.
 4. **Zelle 3 „Einstellungen und Rechnen"**: das Formular rechts ausfüllen
    (Tabelle unten), dann ▶. Je nach Bauteil dauert das 5 Sekunden bis 2 Minuten.
@@ -66,7 +66,7 @@ Maße in mm; Modelle in Metern werden erkannt und umgerechnet.
 
 ## Benutzung auf dem eigenen Rechner
 
-Voraussetzung: Python 3.10 oder neuer.
+Voraussetzung: Python 3.12 oder neuer (getestet mit 3.12 und 3.14).
 
 | Schritt | Linux | Windows |
 | --- | --- | --- |
