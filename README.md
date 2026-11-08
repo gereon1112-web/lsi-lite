@@ -53,7 +53,7 @@ Du brauchst nur ein Google-Konto. Zum Ausprobieren sind zwei Beispiele dabei; f�
 | duese | Düsendurchmesser in mm | 0.4 |
 | schicht_min, schicht_max | dünnste und dickste Schicht, die der Drucker sauber legt | 0.1, 0.35 |
 | neigung_max | wie steil eine Schicht stehen darf (Grad); kleiner als der Freiwinkel von Düse und Heizblock | 20 |
-| fuellung | `konzentrisch` (Ringe parallel zum Rand) oder `zigzag` (Linien, je Schicht um 90° gedreht) | konzentrisch |
+| fuellung | `konzentrisch` (Ringe parallel zum Rand), `zigzag` (Linien, je Schicht um 90° gedreht) oder `explizit` (Stromlinien entlang der Zugrichtung: beste Ausrichtung, aber Lücken, wo Linien auseinanderlaufen) | konzentrisch |
 | fuelldichte | 100 = massiv, 0 = nur Wände | 100 |
 | waende | Anzahl Wandbahnen | 1 |
 | drucker | legt die Bettgröße fest | 220 x 220 |
@@ -118,7 +118,7 @@ Vorschaubild landen neben der `.vtu`. Unter Windows ist das bisher nicht geteste
 | Feld u | Tetraedernetz aus tetgen | Säulennetz über dem Raster; gleiche Gleichung, Elemente und Randwerte |
 | Vorgabeflächen | Bauteilunter- und -oberseite wählbar | Unterseite = Bett (eben), Oberseite nicht vorgegeben |
 | Bahnabstand | auf der Fläche (geodätisch) | in der Draufsicht; auf einer um 20° geneigten Stelle liegen Bahnen 6 % weiter auseinander, die Menge stimmt trotzdem, die Raupe wird dort etwas breiter und flacher |
-| Füllarten | konzentrisch, zigzag, lastgeführt (explizit, implizit) | konzentrisch, zigzag |
+| Füllarten | konzentrisch, zigzag, lastgeführt (explizit, implizit) | konzentrisch, zigzag, explizit |
 | Drucker | 3-Achs und 6-Achs-Roboter (RAPID), Draht | nur 3-Achs |
 | Prüfungen | Druckbarkeitskriterien K1 bis K7 | Schichthöhenfenster, Überhang, Bettgröße |
 

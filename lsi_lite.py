@@ -51,7 +51,7 @@ SETTINGS = {
     "layer_min": 0.1,       # duennste Schicht in mm
     "layer_max": 0.35,      # dickste Schicht in mm
     "max_tilt": 20.0,       # groesste Neigung der Schichten in Grad
-    "infill": "konzentrisch",   # "konzentrisch" oder "zigzag"
+    "infill": "konzentrisch",   # "konzentrisch", "zigzag" oder "explizit" (Stromlinien)
     "density": 100,         # Fuelldichte in Prozent, 0 = nur Waende
     "walls": 1,             # Anzahl Wandbahnen
     "printer": "220 x 220 (Ender-3 u. a.)",
@@ -492,8 +492,11 @@ def zigzag(area, gap, angle):
     return [(m, False) for m in merged]
 
 
-def layer_paths(region, k, cfg, w):
-    """Waende und Fuellung einer Schicht in der Draufsicht: Liste (Punkte, geschlossen)."""
+def layer_paths(region, k, cfg, w, field=None):
+    """Waende und Fuellung einer Schicht in der Draufsicht: Liste (Punkte, geschlossen).
+
+    field (DirectionField) wird nur fuer die Fuellung "explizit" gebraucht.
+    """
     paths = [(r, True) for i in range(cfg["walls"]) for r in rings(region.buffer(-(i + 0.5) * w))]
     density = 100 if k == 0 else cfg["density"]
     if density <= 0:
@@ -503,12 +506,123 @@ def layer_paths(region, k, cfg, w):
     if cfg["infill"] == "zigzag":
         return paths + zigzag(region.buffer(-inset + 0.1 * w), gap,
                               math.radians(45.0 + 90.0 * k))
+    if cfg["infill"] == "explizit":
+        return paths + streamlines(region.buffer(-inset + 0.1 * w), gap, field)
     while True:
         ring = rings(region.buffer(-inset))
         if not ring:
             return paths
         paths += [(r, True) for r in ring]
         inset += gap
+
+
+class DirectionField:
+    """Zugrichtung in einer Schicht, in die Draufsicht gelegt, auf dem Raster.
+
+    sigma_1 wird an den Rasterpunkten der Schicht abgetastet und in die
+    Schichtebene gedreht (Anteil laengs der Normalen weg). Die Richtung hat
+    kein Vorzeichen; beim Abfragen werden die vier Nachbarwerte deshalb erst
+    auf die vorige Richtung ausgerichtet und dann gemittelt.
+    """
+
+    def __init__(self, xs, ys, layer, fem_points, sigma, refs):
+        self.xs, self.ys = xs, ys
+        gy, gx = np.gradient(layer, ys, xs)
+        normal = np.dstack([-gx, -gy, np.ones_like(layer)])
+        normal /= np.linalg.norm(normal, axis=2, keepdims=True)
+        pts = np.column_stack([np.tile(xs, len(ys)), np.repeat(ys, len(xs)), layer.ravel()])
+        e1, weight = sample_tension(pts, fem_points, sigma, refs)
+        e1 = e1.reshape(normal.shape)
+        d = (e1 - np.sum(e1 * normal, axis=2, keepdims=True) * normal)[:, :, :2]
+        size = np.linalg.norm(d, axis=2, keepdims=True)
+        self.d = np.where(size > 1e-6, d / np.maximum(size, 1e-6), 0.0)
+        self.weight = RegularGridInterpolator((ys, xs), weight.reshape(layer.shape),
+                                              bounds_error=False, fill_value=0.0)
+
+    def __call__(self, p, prev=None):
+        """Einheitsrichtung am Punkt p; None, wo die Nachbarwerte nicht zusammenpassen."""
+        fx = (p[0] - self.xs[0]) / (self.xs[1] - self.xs[0])
+        fy = (p[1] - self.ys[0]) / (self.ys[1] - self.ys[0])
+        i = int(np.clip(fx, 0, len(self.xs) - 2))
+        j = int(np.clip(fy, 0, len(self.ys) - 2))
+        ax, ay = fx - i, fy - j
+        corners = self.d[j:j + 2, i:i + 2].reshape(4, 2)
+        share = np.array([(1 - ax) * (1 - ay), ax * (1 - ay), (1 - ax) * ay, ax * ay])
+        ref = prev if prev is not None else corners[np.argmax(share)]
+        v = share @ (corners * np.sign(corners @ ref)[:, None])
+        size = np.linalg.norm(v)
+        return v / size if size > 0.3 else None
+
+
+class Occupancy:
+    """Schon gelegte Bahnpunkte in groben Rasterzellen - fuer schnelle Abstandsfragen."""
+
+    def __init__(self, cell):
+        self.cell, self.cells = cell, {}
+
+    def add(self, points):
+        for q in points:
+            self.cells.setdefault((int(q[0] // self.cell), int(q[1] // self.cell)), []).append(q)
+
+    def near(self, p, r):
+        """Liegt ein gelegter Punkt naeher als r (<= Zellgroesse) an p?"""
+        i, j = int(p[0] // self.cell), int(p[1] // self.cell)
+        return any((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 < r * r
+                   for di in (-1, 0, 1) for dj in (-1, 0, 1)
+                   for q in self.cells.get((i + di, j + dj), ()))
+
+
+def trace(start, direction, field, area, laid, gap):
+    """Eine Stromlinie von start aus in eine Richtung (Mittelpunktsverfahren).
+
+    Abbruch am Rand der Fuellflaeche, wo das Richtungsfeld zerfaellt oder
+    naeher als 0.6 Bahnabstaende an einer schon gelegten Bahn.
+    """
+    import shapely
+    step = 0.5 * gap
+    pts, p, prev = [start], start, direction
+    for _ in range(int(200 * gap / step)):
+        h1 = field(p, prev)
+        h2 = None if h1 is None else field(p + 0.5 * step * h1, h1)
+        if h2 is None:
+            break
+        q = p + step * h2
+        if not shapely.contains_xy(area, q[0], q[1]) or laid.near(q, 0.6 * gap):
+            break
+        pts.append(q)
+        p, prev = q, h2
+    return np.array(pts)
+
+
+def streamlines(area, gap, field):
+    """Fuellbahnen entlang der Zugrichtung ("explizit" im Original).
+
+    Verteilt nach Jobard und Lefer (1997): Eine Linie startet nur, wo die
+    gelegten mindestens einen Bahnabstand entfernt sind; begonnen wird dort,
+    wo der Zug am staerksten ist. Ohne Dichtegarantie - wo Linien
+    auseinanderlaufen, bleiben Luecken.
+    """
+    import shapely
+    if area.is_empty:
+        return []
+    shapely.prepare(area)
+    x0, y0, x1, y1 = area.bounds
+    gx, gy = np.meshgrid(np.arange(x0, x1, gap), np.arange(y0, y1, gap))
+    seeds = np.column_stack([gx.ravel(), gy.ravel()])
+    seeds = seeds[shapely.contains_xy(area, seeds[:, 0], seeds[:, 1])]
+    seeds = seeds[np.argsort(-field.weight(seeds[:, ::-1]), kind="stable")]
+    laid, out = Occupancy(gap), []
+    for s in seeds:
+        d0 = None if laid.near(s, gap) else field(s)
+        if d0 is None:
+            continue
+        fwd = trace(s, d0, field, area, laid, gap)
+        bwd = trace(s, -d0, field, area, laid, gap)
+        P = np.vstack([bwd[::-1], fwd[1:]])
+        if np.linalg.norm(np.diff(P, axis=0), axis=1).sum() >= 3 * gap:
+            out.append((P, False))
+            laid.add(P)
+    return out
 
 
 def resample(p, step):
@@ -597,8 +711,8 @@ def check_settings(cfg):
                          f"Material: {list(MATERIALS)}.")
     if cfg["build_dir"] not in AXES and cfg["build_dir"] != "auto":
         raise InputError(f"Baurichtung {cfg['build_dir']!r} - erlaubt: {', '.join(AXES)}.")
-    if cfg["infill"] not in ("konzentrisch", "zigzag"):
-        raise InputError("Fuellung muss 'konzentrisch' oder 'zigzag' sein.")
+    if cfg["infill"] not in ("konzentrisch", "zigzag", "explizit"):
+        raise InputError("Fuellung muss 'konzentrisch', 'zigzag' oder 'explizit' sein.")
     if not 0 < cfg["layer_min"] < cfg["layer_max"] <= cfg["nozzle"]:
         raise InputError("Schichthoehe: es muss gelten 0 < min < max <= Duesendurchmesser.")
     if not 0 < cfg["max_tilt"] <= 45 or not 0 <= cfg["density"] <= 100 or cfg["walls"] < 0:
@@ -700,7 +814,9 @@ def slice_vtu(vtu, out_dir=None, **settings):
         if support is not None:
             loose.append(region.difference(support.buffer(0.5 * w)).area / region.area)
         support = region
-        ordered = order_paths(layer_paths(region, len(printed), cfg, w), pos)
+        field = (DirectionField(xs, ys, layer, fem_pts, sigma, refs)
+                 if cfg["infill"] == "explizit" else None)
+        ordered = order_paths(layer_paths(region, len(printed), cfg, w, field), pos)
         paths = []
         for p in ordered:
             p = resample(p, RESAMPLE)
