@@ -43,6 +43,7 @@ Du brauchst nur ein Google-Konto. Zum Ausprobieren sind zwei Beispiele dabei; f�
 | Zug in der Schicht 21 % → 28 % | Anteil der Zugspannung, der in der Schicht liegt statt quer durch die Lagenfuge zu ziehen – vor und nach der Optimierung |
 | Neigung max | steilste Stelle der Mittelschicht; höchstens die eingestellte Grenze |
 | Dicke 0.19 .. 0.30 mm | Schichtdicke senkrecht zur Schicht (5. bis 95. Perzentil) |
+| Druckzeit etwa … min | reine Fahrzeit aus Weglänge und Vorschub; ohne Beschleunigung, der Druck dauert real länger |
 | ACHTUNG: Schichtdicke … | die Schichten verlassen das Fenster – Fenster weiten oder Neigung senken |
 | ACHTUNG: Überhang … | Teile der Schichten hängen in der Luft – andere Baurichtung wählen |
 

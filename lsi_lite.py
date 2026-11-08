@@ -577,7 +577,7 @@ class GcodeWriter:
         self.lines, self.pos, self.w, self.retract = [], None, w, retract
         self.flow = bead_area(h_nom, w)
         self.filament = math.pi * FILAMENT ** 2 / 4
-        self.e_total = 0.0
+        self.e_total, self.seconds = 0.0, 0.0
 
     def travel(self, target, surface):
         """Leerfahrt mit Rueckzug, ueber die hoechste Stelle der Schicht auf dem Weg."""
@@ -588,6 +588,8 @@ class GcodeWriter:
             t = np.linspace(0, 1, 12)[:, None]
             way = self.pos[:2] + t * (target[:2] - self.pos[:2])
             z_safe = max(surface(way).max(), self.pos[2], target[2]) + Z_HOP
+            way_len = 2 * z_safe - self.pos[2] - target[2] + np.linalg.norm(target[:2] - self.pos[:2])
+            self.seconds += way_len / TRAVEL_SPEED + 2 * self.retract / RETRACT_SPEED
             self.lines += [f"G1 E{-self.retract:.3f} F{RETRACT_SPEED * 60:.0f}",
                            f"G0 Z{z_safe:.3f} F{TRAVEL_SPEED * 60:.0f}",
                            f"G0 X{target[0]:.3f} Y{target[1]:.3f}",
@@ -608,6 +610,7 @@ class GcodeWriter:
         self.lines += [f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} E{de:.5f} F{f * 60:.0f}"
                        for (x, y, z), de, f in zip(P[1:], e, feed)]
         self.e_total += float(e.sum())
+        self.seconds += float(np.sum(len_3d / feed))
         self.pos = P[-1]
 
 
@@ -768,7 +771,8 @@ def slice_vtu(vtu, out_dir=None, **settings):
     gcode.write_text("\n".join(gc.lines) + "\n", encoding="utf-8")
     meters = gc.e_total / 1000
     print(f"   {gcode.name}: {len(gc.lines)} Zeilen, Filament {meters:.1f} m "
-          f"(etwa {meters * 2.98:.0f} g PLA)")
+          f"(etwa {meters * 2.98:.0f} g PLA), Druckzeit etwa {gc.seconds / 60:.0f} min "
+          f"(ohne Beschleunigung, real laenger)")
     png = out_dir / f"{vtu.stem}_lite.png"
     strokes = tension_strokes(fem_pts, sigma, 2 * cell)
     preview(xs, ys, layers, mid, hits, strokes, cell, png)
