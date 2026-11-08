@@ -1,5 +1,7 @@
 # LSI Lite
 
+[![In Colab öffnen](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/gereon1112-web/lsi-lite/blob/main/LSI_lite.ipynb)
+
 Lastoptimiert slicen aus einem FEM-Ergebnis: Aus einer `.vtu`-Datei mit Spannungsfeld
 entsteht G-Code für einen 3-Achs-Drucker, dessen Schichten der Zugspannung folgen.
 Eine einzige Python-Datei (`lsi_lite.py`), gedacht für Google Colab.
