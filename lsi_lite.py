@@ -1,27 +1,5 @@
 """
-lsi_lite.py - LSI Lite: ein Bauteil aus seinem FEM-Ergebnis (.vtu) lastoptimiert slicen.
-
-Verkleinerte Fassung des Load-Optimized Surface Interpolator (LSI) in einer
-einzigen Datei, gedacht fuer Google Colab. Der Ablauf folgt dem Original:
-
-  1  Quader um das Bauteil, Raster in der Draufsicht
-  2  Mittelschicht so verbiegen, dass die Zugspannung in ihr liegt
-     (Ausgleichsrechnung mit Neigungs- und Amplitudengrenze)
-  3  Schichten dazwischen als Isoflaechen des Laplace-Felds u
-  4  jede Schicht am Bauteil abschneiden
-  5  Waende und Fuellung
-  6  G-Code fuer einen 3-Achs-Drucker
-
-Vereinfacht gegenueber dem Original:
-  - Das Feld u wird auf einem Saeulennetz ueber dem Raster geloest statt auf
-    einem Tetraedernetz aus tetgen. Gleichung, Elemente und Randwerte sind
-    dieselben.
-  - Die Bauteilunterseite ist das Druckbett (eben); die Oberseite wird
-    nicht als Schicht vorgegeben.
-  - Bahnabstaende werden in der Draufsicht gemessen statt auf der Flaeche.
-    Die Menge stimmt trotzdem: extrudiert wird je Saeule (Bahnabstand mal
-    senkrechte Schichtdicke).
-  - Keine Stuetzen, kein Roboter, kein Draht.
+LSI Lite: ein Bauteil aus seinem FEM-Ergebnis (.vtu) lastoptimiert slicen; Verfahren und Grenzen im README.
 
     python lsi_lite.py                 die .vtu-Datei im Ordner eingabe/
     python lsi_lite.py bauteil.vtu
@@ -41,11 +19,9 @@ from scipy.spatial import cKDTree
 
 HERE = Path(__file__).resolve().parent
 
-# ======================================================================
-# EINSTELLUNGEN
-# ======================================================================
+# --- EINSTELLUNGEN ---
 
-# Was der Nutzer waehlt - im Notebook das Formular.
+# Was der Nutzer waehlt (im Notebook das Formular).
 SETTINGS = {
     "nozzle": 0.4,          # Duesendurchmesser in mm
     "layer_min": 0.1,       # duennste Schicht in mm
@@ -91,7 +67,7 @@ G28 X
 M84
 """
 
-# Druckbett (x, y) in mm. Ein weiterer Drucker ist eine Zeile mehr.
+# Druckbett (x, y) in mm.
 PRINTERS = {
     "220 x 220 (Ender-3 u. a.)": (220.0, 220.0),
     "250 x 210 (Prusa MK3/MK4)": (250.0, 210.0),
@@ -125,7 +101,7 @@ RESAMPLE = 0.5              # Punktabstand der Bahnen in mm
 STRESS_FIELDS = ("Stress xx component", "Stress yy component",
                  "Stress zz component", "Stress xy component",
                  "Stress yz component", "Stress xz component")
-# Mitgelieferte Beispiele: Datei und Baurichtung.
+# Beispiele: Datei und Baurichtung.
 EXAMPLES = {
     "Biegebalken": ("beispiele/biegebalken.vtu", "+y"),
     "Tragwerk": ("beispiele/tragwerk.vtu", "-y"),
@@ -138,15 +114,10 @@ class InputError(Exception):
     """Fehler in Eingabe oder Einstellungen; die Meldung sagt, was zu tun ist."""
 
 
-# ======================================================================
-# 1  BAUTEIL LESEN UND AUFS BETT LEGEN
-# ======================================================================
+# --- 1  BAUTEIL LESEN UND AUFS BETT LEGEN ---
 
 def read_vtu(path):
-    """Knoten, Spannungstensor je Knoten und Tetraeder (Eckknoten) einer VTU-Datei.
-
-    Gelesen wird mit VTK selbst, dem Referenzleser des Formats.
-    """
+    """Knoten, Spannungstensor je Knoten und Tetraeder (Eckknoten) einer VTU-Datei."""
     from vtkmodules.util.numpy_support import vtk_to_numpy
     from vtkmodules.vtkCommonCore import vtkObject
     from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridReader
@@ -160,8 +131,7 @@ def read_vtu(path):
     if grid.GetNumberOfPoints() == 0:
         raise InputError(f"{path} laesst sich nicht als VTU-Datei lesen "
                          f"(leer oder beschaedigt). Datei erneut exportieren bzw. hochladen.")
-    # VTK-Zelltypen 10 = Tetraeder, 24 = quadratischer Tetraeder; die ersten
-    # vier Knoten sind in beiden Faellen die Ecken.
+    # VTK-Typ 10/24 = linearer/quadratischer Tetraeder, Ecken sind die ersten vier Knoten
     types = vtk_to_numpy(grid.GetCellTypes())
     start = vtk_to_numpy(grid.GetCells().GetOffsetsArray())[:-1][np.isin(types, (10, 24))]
     if len(start) == 0:
@@ -223,17 +193,11 @@ def place_on_bed(points, sigma, build_dir, bed):
     return p, sigma
 
 
-# ======================================================================
-# INNEN ODER AUSSEN: SENKRECHTE LINIEN DURCH DIE HUELLE
-# ======================================================================
+# --- INNEN ODER AUSSEN: SENKRECHTE LINIEN DURCH DIE HUELLE ---
 
 def column_hits(hull, xs, ys):
-    """Wo die senkrechten Linien ueber dem Raster (xs, ys) die Huelle durchstossen.
-
-    Rueckgabe: (Punktnummer j * len(xs) + i, Hoehe z), nach beidem sortiert.
-    Das Raster wird um einen Bruchteil verschoben, damit keine Linie genau
-    eine Dreieckskante trifft und doppelt zaehlt.
-    """
+    """Durchstosspunkte senkrechter Linien ueber dem Raster mit der Huelle: (Punktnummer, z), sortiert."""
+    # leicht verschoben, damit keine Linie genau eine Kante trifft und doppelt zaehlt
     xs = xs + 1.234e-7 * (xs[1] - xs[0])
     ys = ys + 2.345e-7 * (ys[1] - ys[0])
     lo, hi = hull[:, :, :2].min(axis=1), hull[:, :, :2].max(axis=1)
@@ -274,15 +238,10 @@ def depth(hits, z):
     return np.where((pos - start) % 2 == 1, d, -d)
 
 
-# ======================================================================
-# FINITE ELEMENTE (gebraucht von 2 und 3)
-# ======================================================================
+# --- FINITE ELEMENTE (gebraucht von 2 und 3) ---
 
 def simplex_gradients(P):
-    """Gradienten der linearen Formfunktionen und Inhalt je Dreieck/Tetraeder.
-
-    P: (E, d+1, d) Eckpunkte. Rueckgabe: G (E, d+1, d), Inhalt (E,).
-    """
+    """Gradienten der linearen Formfunktionen und Inhalt je Dreieck/Tetraeder; P: (E, d+1, d)."""
     M = P[:, 1:] - P[:, :1]
     inner = np.linalg.inv(np.swapaxes(M, 1, 2))
     G = np.concatenate([-inner.sum(axis=1, keepdims=True), inner], axis=1)
@@ -298,17 +257,11 @@ def stiffness(elems, G, coeff, n):
                          shape=(n, n))
 
 
-# ======================================================================
-# 2  MITTELSCHICHT IN DIE ZUGRICHTUNG LEGEN
-# ======================================================================
+# --- 2  MITTELSCHICHT IN DIE ZUGRICHTUNG LEGEN ---
 
 def sample_tension(query, fem_points, sigma, refs):
-    """Zugrichtung e1 und Ausrichtungsgewicht (0..1) an beliebigen Punkten.
-
-    Gemittelt wird der Tensor der naechsten FEM-Knoten, erst das Mittel
-    wird zerlegt - Hauptrichtungen haben kein Vorzeichen. Gewicht: nur Zug
-    zaehlt, und nur, wo sigma_1 deutlich groesser als sigma_2 ist.
-    """
+    """Zugrichtung e1 und Ausrichtungsgewicht (0..1, nur Zug) an beliebigen Punkten."""
+    # erst den Tensor mitteln, dann zerlegen: Hauptrichtungen haben kein Vorzeichen
     dist, idx = cKDTree(fem_points).query(query, k=IDW_K)
     w = 1.0 / (dist ** IDW_POWER + 1e-12)
     w /= w.sum(axis=1, keepdims=True)
@@ -337,15 +290,7 @@ def solve_bounded(S, rhs, s_lo, s_hi, rounds=12):
 
 
 def warp_mid(xy, tris, e1, weight, s_lo, s_hi, max_tilt):
-    """Versatz s je Rasterknoten, der die Mittelschicht in die Zugrichtung legt.
-
-    Ausgleichsproblem wie im Original (src/warp.py):
-        Summe Flaeche * Gewicht * (grad s . e1 - n0 . e1)^2    Ausrichtung
-      + Summe Flaeche * lam * |grad s|^2                       Glaettung
-      + mu * Summe Masse * s^2                                 Ruecktrieb
-    lam steigt nur dort, wo die Neigung oder die Amplitude die Grenze
-    reisst. Rueckgabe: (s, Neigung je Dreieck in Grad).
-    """
+    """Versatz s, der die Mittelschicht in die Zugrichtung legt (wie src/warp.py); Rueckgabe (s, Neigung)."""
     n = len(xy)
     G, area = simplex_gradients(xy[tris])
     w_typ = float(np.average(weight, weights=area))
@@ -370,8 +315,7 @@ def warp_mid(xy, tris, e1, weight, s_lo, s_hi, max_tilt):
         if not viol.any():
             break
         lam[viol] = np.minimum(lam[viol] * TILT_GROWTH, cap)
-    # Letzte Sicherung: Die Neigung eines Hoehenfelds waechst linear mit s,
-    # der zulaessige Anteil laesst sich also direkt ausrechnen.
+    # Neigung eines Hoehenfelds waechst linear mit s: zulaessiger Anteil direkt
     gamma = min(1.0, math.tan(math.radians(max_tilt)) / max(slope.max(), 1e-12))
     if gamma < 1.0:
         print(f"  Neigungsgrenze haelt erst mit {gamma:.0%} des Versatzes.")
@@ -386,27 +330,16 @@ def alignment(slope_vec, e1, weight, area):
     return float(np.average(q, weights=area * weight + 1e-30))
 
 
-# ======================================================================
-# 3  SCHICHTEN AUS DEM LAPLACE-FELD
-# ======================================================================
+# --- 3  SCHICHTEN AUS DEM LAPLACE-FELD ---
 
-# Sechs Tetraeder je Quader, alle entlang derselben Raumdiagonale - damit
-# passen benachbarte Quader ohne Luecke aneinander.
+# sechs Tetraeder je Quader entlang derselben Diagonale, damit Nachbarn lueckenlos passen
 KUHN = np.array([[[0, 0, 0]] + [list(np.sum([np.eye(3, dtype=int)[a] for a in p[:m]], axis=0))
                                 for m in (1, 2, 3)]
                  for p in itertools.permutations(range(3))])
 
 
 def laplace_layers(xs, ys, lo, hi, levels, cell):
-    """Schichthoehen zwischen zwei Vorgabeflaechen aus dem Feld u.
-
-    u = 0 auf lo, u = 1 auf hi, an den Seiten nichts vorgegeben (die
-    Schichten treffen senkrecht auf die Wand); dazwischen ist jeder Knoten
-    das gewichtete Mittel seiner Nachbarn. Das Netz steht in Saeulen ueber
-    dem Raster, jede Saeule mit gleich vielen Stockwerken - damit ist lo
-    und hi exakt Rand des Netzes, und jede Isoflaeche ist wieder ein
-    Hoehenfeld. Rueckgabe: (len(levels), ny, nx).
-    """
+    """Isoflaechen u = levels des Laplace-Felds (u = 0 auf lo, 1 auf hi) als Hoehenfelder, Saeulennetz."""
     ny, nx = lo.shape
     nz = max(4, int(math.ceil(float(np.mean(hi - lo)) / (0.5 * cell))))
     Z = lo + np.linspace(0.0, 1.0, nz + 1)[:, None, None] * (hi - lo)
@@ -435,9 +368,7 @@ def laplace_layers(xs, ys, lo, hi, levels, cell):
     return np.array(out)
 
 
-# ======================================================================
-# 4  SCHICHT AM BAUTEIL ABSCHNEIDEN, 5  BAHNEN
-# ======================================================================
+# --- 4  SCHICHT AM BAUTEIL ABSCHNEIDEN, 5  BAHNEN ---
 
 def outline(xs, ys, d):
     """Bereich, in dem d > 0 ist, als shapely-Flaeche (mit Loechern und Inseln)."""
@@ -468,7 +399,7 @@ def rings(geom):
 def zigzag(area, gap, angle):
     """Parallele Linien im Abstand gap, Nachbarenden zu Zickzack verbunden."""
     from shapely import affinity
-    from shapely.geometry import LineString, MultiLineString
+    from shapely.geometry import LineString
     if area.is_empty:
         return []
     turned = affinity.rotate(area, -angle, origin=(0, 0), use_radians=True)
@@ -493,10 +424,7 @@ def zigzag(area, gap, angle):
 
 
 def layer_paths(region, k, cfg, w, field=None):
-    """Waende und Fuellung einer Schicht in der Draufsicht: Liste (Punkte, geschlossen).
-
-    field (DirectionField) wird nur fuer die Fuellung "explizit" gebraucht.
-    """
+    """Waende und Fuellung einer Schicht in der Draufsicht: Liste (Punkte, geschlossen)."""
     paths = [(r, True) for i in range(cfg["walls"]) for r in rings(region.buffer(-(i + 0.5) * w))]
     density = 100 if k == 0 else cfg["density"]
     if density <= 0:
@@ -517,13 +445,7 @@ def layer_paths(region, k, cfg, w, field=None):
 
 
 class DirectionField:
-    """Zugrichtung in einer Schicht, in die Draufsicht gelegt, auf dem Raster.
-
-    sigma_1 wird an den Rasterpunkten der Schicht abgetastet und in die
-    Schichtebene gedreht (Anteil laengs der Normalen weg). Die Richtung hat
-    kein Vorzeichen; beim Abfragen werden die vier Nachbarwerte deshalb erst
-    auf die vorige Richtung ausgerichtet und dann gemittelt.
-    """
+    """Zugrichtung sigma_1 in der Schichtebene, in die Draufsicht gelegt, auf dem Raster."""
 
     def __init__(self, xs, ys, layer, fem_points, sigma, refs):
         self.xs, self.ys = xs, ys
@@ -548,6 +470,7 @@ class DirectionField:
         ax, ay = fx - i, fy - j
         corners = self.d[j:j + 2, i:i + 2].reshape(4, 2)
         share = np.array([(1 - ax) * (1 - ay), ax * (1 - ay), (1 - ax) * ay, ax * ay])
+        # ohne Vorzeichen: erst auf die vorige Richtung ausrichten, dann mitteln
         ref = prev if prev is not None else corners[np.argmax(share)]
         v = share @ (corners * np.sign(corners @ ref)[:, None])
         size = np.linalg.norm(v)
@@ -555,7 +478,7 @@ class DirectionField:
 
 
 class Occupancy:
-    """Schon gelegte Bahnpunkte in groben Rasterzellen - fuer schnelle Abstandsfragen."""
+    """Gelegte Bahnpunkte in Rasterzellen, fuer schnelle Abstandsfragen."""
 
     def __init__(self, cell):
         self.cell, self.cells = cell, {}
@@ -573,11 +496,7 @@ class Occupancy:
 
 
 def trace(start, direction, field, area, laid, gap):
-    """Eine Stromlinie von start aus in eine Richtung (Mittelpunktsverfahren).
-
-    Abbruch am Rand der Fuellflaeche, wo das Richtungsfeld zerfaellt oder
-    naeher als 0.6 Bahnabstaende an einer schon gelegten Bahn.
-    """
+    """Stromlinie von start in eine Richtung (Mittelpunktsverfahren), bis Rand, Feldbruch oder Nachbarbahn."""
     import shapely
     step = 0.5 * gap
     pts, p, prev = [start], start, direction
@@ -595,13 +514,7 @@ def trace(start, direction, field, area, laid, gap):
 
 
 def streamlines(area, gap, field):
-    """Fuellbahnen entlang der Zugrichtung ("explizit" im Original).
-
-    Verteilt nach Jobard und Lefer (1997): Eine Linie startet nur, wo die
-    gelegten mindestens einen Bahnabstand entfernt sind; begonnen wird dort,
-    wo der Zug am staerksten ist. Ohne Dichtegarantie - wo Linien
-    auseinanderlaufen, bleiben Luecken.
-    """
+    """Fuellbahnen entlang der Zugrichtung nach Jobard und Lefer (1997), staerkster Zug zuerst."""
     import shapely
     if area.is_empty:
         return []
@@ -626,7 +539,7 @@ def streamlines(area, gap, field):
 
 
 def resample(p, step):
-    """Unterteilt einen Linienzug, bis kein Abschnitt laenger als step ist; doppelte Punkte fallen weg."""
+    """Unterteilt einen Linienzug in Abschnitte <= step; doppelte Punkte fallen weg."""
     p = p[np.r_[True, np.linalg.norm(np.diff(p, axis=0), axis=1) > 1e-6]]
     d = np.diff(p, axis=0)
     n = np.maximum(1, np.ceil(np.linalg.norm(d, axis=1) / step)).astype(int)
@@ -649,9 +562,7 @@ def order_paths(paths, start):
     return out
 
 
-# ======================================================================
-# 6  G-CODE
-# ======================================================================
+# --- 6  G-CODE ---
 
 def bead_area(h, w):
     """Querschnitt einer Bahn: Rechteck mit runden Flanken (wie PrusaSlicer und Cura)."""
@@ -685,7 +596,7 @@ class GcodeWriter:
         self.pos = target
 
     def extrude(self, P, thickness, speed, flow):
-        """Faehrt die Punkte P (n, 3) ab; Menge je Saeule = Querschnitt * Laenge in der Draufsicht."""
+        """Faehrt P (n, 3) ab; Menge = Querschnitt * Laenge in der Draufsicht (stimmt je Saeule)."""
         h = 0.5 * (thickness[1:] + thickness[:-1])
         area = bead_area(h, self.w)
         len_xy = np.linalg.norm(np.diff(P[:, :2], axis=0), axis=1)
@@ -700,9 +611,7 @@ class GcodeWriter:
         self.pos = P[-1]
 
 
-# ======================================================================
-# GESAMTABLAUF
-# ======================================================================
+# --- GESAMTABLAUF ---
 
 def check_settings(cfg):
     """Prueft die Einstellungen; Rueckgabe: Bahnbreite und Schichthoehe in der Mitte des Fensters."""
@@ -727,11 +636,7 @@ def check_settings(cfg):
 
 
 def slice_vtu(vtu, out_dir=None, **settings):
-    """Rechnet aus dem FEM-Ergebnis vtu den G-Code.
-
-    Rueckgabe: (G-Code-Datei, Vorschaubild, Bahnen je Schicht als Liste von
-    (n, 3)-Arrays, Zugrichtung als Striche fuer show_paths).
-    """
+    """Rechnet den G-Code; Rueckgabe (G-Code, Vorschaubild, Bahnen je Schicht, Zugstriche)."""
     cfg = {**SETTINGS, **settings}
     w, h_nom = check_settings(cfg)
     vtu = Path(vtu)
@@ -755,8 +660,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
           f" x {height:.1f} mm, Raster {nx} x {ny} ({cell:.2f} mm)")
 
     print("2  Mittelschicht in die Zugrichtung legen")
-    # Quader wie im Original: doppelt so hoch wie das Bauteil, Mittelschicht
-    # auf halber Bauteilhoehe; die Unterseite des Bauteils ist das Bett.
+    # Quader wie im Original: doppelte Bauteilhoehe, Mittelschicht mittig, Bett unten
     z_mid, z_top = 0.5 * height, 1.5 * height
     xy = np.column_stack([np.tile(xs, ny), np.repeat(ys, nx)])
     idx = np.arange(nx * ny).reshape(ny, nx)
@@ -826,7 +730,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
         slope = np.degrees(np.arctan(np.hypot(*np.gradient(layer, ys, xs))))
         inside_k = depth(hits, layer.ravel()).reshape(ny, nx) > 0
         if inside_k.any():
-            # robust wie im Original: 5. und 95. Perzentil je Schicht
+            # 5./95. Perzentil je Schicht wie im Original
             h_n = ((layer - layers[k - 1] if k else layer) * np.cos(np.radians(slope)))[inside_k]
             h_rng = [min(h_rng[0], np.percentile(h_n, 5)), max(h_rng[1], np.percentile(h_n, 95))]
         printed.append((paths, surf))
@@ -872,15 +776,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
 
 
 def tension_strokes(points, sigma, length):
-    """Zugspannungsfeld zum Anzeigen: ein Strich in Richtung sigma_1 je FEM-Knoten mit Zug.
-
-    Knoten unter 5 % der Bezugsspannung entfallen - dort richtet sich auch die
-    Mittelschicht praktisch nicht aus.
-
-    Striche statt Pfeile, denn die Hauptrichtung hat kein Vorzeichen. Die Laenge
-    waechst gestaucht mit dem Betrag (wie im Original), damit nicht alles ausser
-    der Lasteinleitung verschwindet. Rueckgabe: (n, 2, 3) Anfangs- und Endpunkte.
-    """
+    """Striche in Richtung sigma_1 an FEM-Knoten ab 5 % Zug, Laenge gestaucht mit dem Betrag; (n, 2, 3)."""
     vals, vecs = np.linalg.eigh(sigma)
     if not (vals[:, -1] > 0).any():
         return np.empty((0, 2, 3))
@@ -893,12 +789,7 @@ def tension_strokes(points, sigma, length):
 
 
 def show_paths(layer_paths, upto=None, strokes=None, max_points=300_000, max_strokes=2000):
-    """Drehbare 3D-Ansicht der Bahnen bis Schicht upto (None = alle), Farbe = Schicht.
-
-    strokes (aus tension_strokes) blendet die Zugrichtung ein, bis zur Hoehe der
-    gezeigten Bahnen. Bei sehr vielen Punkten wird jeder n-te gezeigt, damit der
-    Browser fluessig bleibt.
-    """
+    """Drehbare 3D-Ansicht der Bahnen bis Schicht upto, optional mit Zugstrichen; duennt fuer den Browser aus."""
     import plotly.graph_objects as go
     shown = layer_paths[:upto]
     total = sum(len(P) for paths in shown for P in paths)
