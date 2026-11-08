@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+.notizen/
+test/
+eingabe/*
+!eingabe/.gitkeep
+*.gcode
+*_lite.png
