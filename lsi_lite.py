@@ -56,7 +56,8 @@ SETTINGS = {
     "walls": 1,             # Anzahl Wandbahnen
     "printer": "220 x 220 (Ender-3 u. a.)",
     "material": "PLA",
-    "build_dir": "+z",      # Baurichtung im FEM-Modell: +z, -z, +x, -x, +y, -y
+    "build_dir": "auto",    # Baurichtung im FEM-Modell: +z, -z, +x, -x, +y, -y;
+                            # "auto" = wie beim Beispiel, sonst +z
 }
 
 START_GCODE = """\
@@ -124,6 +125,11 @@ RESAMPLE = 0.5              # Punktabstand der Bahnen in mm
 STRESS_FIELDS = ("Stress xx component", "Stress yy component",
                  "Stress zz component", "Stress xy component",
                  "Stress yz component", "Stress xz component")
+# Mitgelieferte Beispiele: Datei und Baurichtung.
+EXAMPLES = {
+    "Biegebalken": ("beispiele/biegebalken.vtu", "+y"),
+    "Tragwerk": ("beispiele/tragwerk.vtu", "-y"),
+}
 AXES = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0),
         "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
 
@@ -589,7 +595,7 @@ def check_settings(cfg):
     if cfg["printer"] not in PRINTERS or cfg["material"] not in MATERIALS:
         raise InputError(f"Drucker oder Material unbekannt. Drucker: {list(PRINTERS)}, "
                          f"Material: {list(MATERIALS)}.")
-    if cfg["build_dir"] not in AXES:
+    if cfg["build_dir"] not in AXES and cfg["build_dir"] != "auto":
         raise InputError(f"Baurichtung {cfg['build_dir']!r} - erlaubt: {', '.join(AXES)}.")
     if cfg["infill"] not in ("konzentrisch", "zigzag"):
         raise InputError("Fuellung muss 'konzentrisch' oder 'zigzag' sein.")
@@ -609,13 +615,17 @@ def check_settings(cfg):
 def slice_vtu(vtu, out_dir=None, **settings):
     """Rechnet aus dem FEM-Ergebnis vtu den G-Code.
 
-    Rueckgabe: (G-Code-Datei, Vorschaubild, Bahnen je Schicht als Liste von (n, 3)-Arrays).
+    Rueckgabe: (G-Code-Datei, Vorschaubild, Bahnen je Schicht als Liste von
+    (n, 3)-Arrays, Zugrichtung als Striche fuer show_paths).
     """
     cfg = {**SETTINGS, **settings}
     w, h_nom = check_settings(cfg)
     vtu = Path(vtu)
     out_dir = Path(out_dir) if out_dir else vtu.parent
     bed = PRINTERS[cfg["printer"]]
+    if cfg["build_dir"] == "auto":
+        cfg["build_dir"] = next((d for f, d in EXAMPLES.values() if Path(f).name == vtu.name), "+z")
+        print(f"Baurichtung {cfg['build_dir']} (automatisch)")
 
     print("1  Bauteil lesen")
     fem_pts, sigma, tets = read_vtu(vtu)
@@ -740,19 +750,43 @@ def slice_vtu(vtu, out_dir=None, **settings):
     print(f"   {gcode.name}: {len(gc.lines)} Zeilen, Filament {meters:.1f} m "
           f"(etwa {meters * 2.98:.0f} g PLA)")
     png = out_dir / f"{vtu.stem}_lite.png"
-    preview(xs, ys, layers, mid, hits, png)
-    return gcode, png, [[P for P, _ in paths] for paths, _ in printed]
+    strokes = tension_strokes(fem_pts, sigma, 2 * cell)
+    preview(xs, ys, layers, mid, hits, strokes, cell, png)
+    return gcode, png, [[P for P, _ in paths] for paths, _ in printed], strokes
 
 
-def show_paths(layer_paths, upto=None, max_points=300_000):
+def tension_strokes(points, sigma, length):
+    """Zugspannungsfeld zum Anzeigen: ein Strich in Richtung sigma_1 je FEM-Knoten mit Zug.
+
+    Knoten unter 5 % der Bezugsspannung entfallen - dort richtet sich auch die
+    Mittelschicht praktisch nicht aus.
+
+    Striche statt Pfeile, denn die Hauptrichtung hat kein Vorzeichen. Die Laenge
+    waechst gestaucht mit dem Betrag (wie im Original), damit nicht alles ausser
+    der Lasteinleitung verschwindet. Rueckgabe: (n, 2, 3) Anfangs- und Endpunkte.
+    """
+    vals, vecs = np.linalg.eigh(sigma)
+    if not (vals[:, -1] > 0).any():
+        return np.empty((0, 2, 3))
+    ref = np.percentile(vals[vals[:, -1] > 0, -1], 95)
+    tension = vals[:, -1] > 0.05 * ref
+    s1 = vals[tension, -1]
+    half = 0.5 * length * np.minimum(s1 / ref, 1.0) ** 0.4
+    e = vecs[tension, :, -1] * half[:, None]
+    return np.stack([points[tension] - e, points[tension] + e], axis=1)
+
+
+def show_paths(layer_paths, upto=None, strokes=None, max_points=300_000, max_strokes=2000):
     """Drehbare 3D-Ansicht der Bahnen bis Schicht upto (None = alle), Farbe = Schicht.
 
-    Bei sehr vielen Punkten wird jeder n-te gezeigt, damit der Browser fluessig bleibt.
+    strokes (aus tension_strokes) blendet die Zugrichtung ein, bis zur Hoehe der
+    gezeigten Bahnen. Bei sehr vielen Punkten wird jeder n-te gezeigt, damit der
+    Browser fluessig bleibt.
     """
     import plotly.graph_objects as go
     shown = layer_paths[:upto]
     total = sum(len(P) for paths in shown for P in paths)
-    step = max(1, total // max_points)
+    step = max(1, -(-total // max_points))
     xyz, color = [], []
     for k, paths in enumerate(shown):
         for P in paths:
@@ -761,23 +795,31 @@ def show_paths(layer_paths, upto=None, max_points=300_000):
             color.append(np.full(len(pts), k))
     xyz, color = np.vstack(xyz), np.concatenate(color)
     fig = go.Figure(go.Scatter3d(
-        x=xyz[:, 0], y=xyz[:, 1], z=xyz[:, 2], mode="lines",
+        x=xyz[:, 0], y=xyz[:, 1], z=xyz[:, 2], mode="lines", name="Bahnen",
         line=dict(color=color, colorscale="Turbo", width=2,
-                  colorbar=dict(title="Schicht"))))
+                  colorbar=dict(title="Schicht", x=1.0))))
+    if strokes is not None and len(strokes):
+        s = strokes[strokes[:, :, 2].mean(axis=1) <= np.nanmax(xyz[:, 2])]
+        s = s[::max(1, len(s) // max_strokes)]
+        s = np.concatenate([s, np.full((len(s), 1, 3), np.nan)], axis=1).reshape(-1, 3)
+        fig.add_trace(go.Scatter3d(x=s[:, 0], y=s[:, 1], z=s[:, 2], mode="lines",
+                                   name="Zugrichtung (sigma_1)", line=dict(color="black", width=3)))
     fig.update_layout(scene=dict(aspectmode="data", xaxis_title="x", yaxis_title="y",
                                  zaxis_title="z"),
                       margin=dict(l=0, r=0, t=30, b=0), height=600,
+                      legend=dict(x=0, y=1),
                       title=f"Bahnen der Schichten 1 bis {len(shown)}"
                             + (f" (jeder {step}. Punkt)" if step > 1 else ""))
     return fig
 
 
-def preview(xs, ys, layers, mid, hits, png):
-    """Vorschaubild: Schnitt durch die Schichten und Auslenkung der Mittelschicht."""
+def preview(xs, ys, layers, mid, hits, strokes, cell, png):
+    """Vorschaubild: Schnitt durch Schichten und Zugrichtung, Auslenkung der Mittelschicht."""
     import matplotlib
     if "ipykernel" not in sys.modules:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
     j = len(ys) // 2
     row = (hits[0] // len(xs) == j)
     row_hits = (hits[0][row] % len(xs), hits[1][row])
@@ -789,13 +831,18 @@ def preview(xs, ys, layers, mid, hits, png):
         left.plot(xs, np.where(depth(row_hits, z) > 0, z, np.nan), color="0.45", lw=0.6)
     left.plot(xs, np.where(depth(row_hits, mid[j]) > 0, mid[j], np.nan), color="C3", lw=2,
               label="Mittelschicht")
+    near = strokes[np.abs(strokes[:, :, 1].mean(axis=1) - ys[j]) < 0.5 * cell]
+    near = near[::max(1, -(-len(near) // 200))]
+    centre = near.mean(axis=1, keepdims=True)
+    left.add_collection(LineCollection((centre + 0.5 * (near - centre))[:, :, [0, 2]],
+                                       colors="C0", linewidths=1.0, label="Zugrichtung (sigma_1)"))
     left.set(title=f"Schnitt bei y = {ys[j]:.1f} mm (jede {every}. Schicht)",
              xlabel="x in mm", ylabel="z in mm", aspect="equal")
-    left.legend(loc="upper right")
+    left.legend(loc="upper center", bbox_to_anchor=(0.5, -0.42), ncol=2, frameon=False)
     im = right.imshow(mid - mid.mean(), origin="lower", cmap="coolwarm",
                       extent=(xs[0], xs[-1], ys[0], ys[-1]))
     right.set(title="Auslenkung der Mittelschicht", xlabel="x in mm", ylabel="y in mm")
-    fig.colorbar(im, ax=right, label="mm", shrink=0.8)
+    fig.colorbar(im, ax=right, label="mm", location="bottom", shrink=0.8)
     fig.tight_layout()
     fig.savefig(png, dpi=130)
     if "ipykernel" in sys.modules:
@@ -822,7 +869,7 @@ def main():
     parser.add_argument("vtu", nargs="?", help="FEM-Ergebnis (Vorgabe: die Datei in eingabe/)")
     args = parser.parse_args()
     try:
-        gcode, png, _ = slice_vtu(Path(args.vtu) if args.vtu else default_input())
+        gcode, png, _, _ = slice_vtu(Path(args.vtu) if args.vtu else default_input())
     except InputError as err:
         sys.exit(f"Abbruch: {err}")
     print(f"Fertig: {gcode}\n        {png}")

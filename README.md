@@ -12,21 +12,26 @@ ein Zwanzigstel (siehe [Was vereinfacht ist](#was-vereinfacht-ist)).
 
 ## Benutzung in Google Colab
 
-Du brauchst nur ein Google-Konto und deine `.vtu`-Datei.
+Du brauchst nur ein Google-Konto. Zum Ausprobieren sind zwei Beispiele dabei; für eigene Bauteile deine `.vtu`-Datei.
 
 1. Notebook öffnen:
    <https://colab.research.google.com/github/gereon1112-web/lsi-lite/blob/main/LSI_lite.ipynb>
    (oder in Colab *Datei → Notebook öffnen → GitHub*, `gereon1112-web/lsi-lite` eingeben).
 2. **Zelle 1 „Einrichten"** mit ▶ starten. Beim ersten Mal fragt Colab, ob du dem
    Notebook vertraust: *Trotzdem ausführen*. Nach etwa 30 Sekunden steht „Bereit."
-3. **Zelle 2 „Datei hochladen"** starten, *Dateien auswählen*, deine `.vtu` wählen.
+3. **Zelle 2 „Eingabe"**: rechts ein Beispiel wählen (Tragwerk oder Biegebalken) oder
+   „eigene Datei hochladen", dann ▶ und bei eigener Datei *Dateien auswählen*.
 4. **Zelle 3 „Einstellungen und Rechnen"**: das Formular rechts ausfüllen
    (Tabelle unten), dann ▶. Je nach Bauteil dauert das 5 Sekunden bis 2 Minuten.
    Ausgegeben werden ein Protokoll und ein Vorschaubild:
-   links ein Schnitt durch die Schichten (rot die lastoptimierte Mittelschicht),
-   rechts, wie weit die Mittelschicht nach oben oder unten ausweicht.
+   links ein Schnitt durch die Schichten (rot die lastoptimierte Mittelschicht, blau
+   die Zugrichtung aus dem FEM-Ergebnis), rechts, wie weit die Mittelschicht nach oben
+   oder unten ausweicht.
 5. **Zelle 4 „Ansehen"** zeigt die Bahnen in 3D, mit der Maus drehbar, Farbe = Schicht.
-   Mit „bis_schicht" (z. B. auf die Hälfte) schaust du ins Innere.
+   Schwarze Striche zeigen die Zugrichtung (größte Hauptspannung, länger = mehr Zug);
+   ein Klick auf „Zugrichtung" in der Legende blendet sie aus. Mit „bis_schicht"
+   (z. B. auf die Hälfte) schaust du ins Innere und siehst, ob die Mittelschicht
+   den Strichen folgt.
 6. **Zelle 5 „Herunterladen"** speichert den G-Code (`<name>_lite.gcode`).
 
 Ändern sich nur Einstellungen, genügt es, ab Zelle 3 neu zu starten.
@@ -53,7 +58,7 @@ Du brauchst nur ein Google-Konto und deine `.vtu`-Datei.
 | waende | Anzahl Wandbahnen | 1 |
 | drucker | legt die Bettgröße fest | 220 x 220 |
 | material | Temperaturen, Lüfter, Rückzug | PLA |
-| baurichtung | welche Achse des FEM-Modells beim Druck nach oben zeigt | +z |
+| baurichtung | welche Achse des FEM-Modells beim Druck nach oben zeigt; `auto` = bei den Beispielen deren Richtung, sonst +z | auto |
 
 Die Bahnbreite ist Düse + größte Schichthöhe (wie im Original). Weitere feste Werte
 (Geschwindigkeiten, Rückzug, Start-G-Code) stehen oben in `lsi_lite.py`.
@@ -63,6 +68,14 @@ z. B. der VTU-Export eines CalculiX-Ergebnisses aus FreeCAD (Felder
 „Stress xx component" usw.) oder ein Feld `stress` mit 6 oder 9 Komponenten.
 Die Unterseite des Bauteils muss in Baurichtung eben auf dem Bett liegen.
 Maße in mm; Modelle in Metern werden erkannt und umgerechnet.
+
+**Die Beispiele** in `beispiele/` sind FEM-Ergebnisse aus der Diplomarbeit (FreeCAD/CalculiX,
+quadratische Tetraeder):
+
+| Datei | Bauteil | Baurichtung |
+| --- | --- | --- |
+| `tragwerk.vtu` | sechsarmiges Tragwerk, 130 x 113 x 13 mm | −y |
+| `biegebalken.vtu` | Balken unter Dreipunktbiegung, 110 x 15 x 15 mm | +y |
 
 ## Benutzung auf dem eigenen Rechner
 
@@ -74,6 +87,7 @@ Voraussetzung: Python 3.12 oder neuer (getestet mit 3.12 und 3.14).
 | Pakete installieren | `.venv/bin/pip install -r requirements.txt` | `.venv\Scripts\pip install -r requirements.txt` |
 | `.vtu` in den Ordner `eingabe/` legen, dann starten | `.venv/bin/python lsi_lite.py` | `.venv\Scripts\python lsi_lite.py` |
 | oder mit Pfad | `.venv/bin/python lsi_lite.py teil.vtu` | `.venv\Scripts\python lsi_lite.py teil.vtu` |
+| Beispiel | `.venv/bin/python lsi_lite.py beispiele/tragwerk.vtu` | `.venv\Scripts\python lsi_lite.py beispiele\tragwerk.vtu` |
 
 Die Einstellungen stehen dann oben in `lsi_lite.py` unter `SETTINGS`. G-Code und
 Vorschaubild landen neben der `.vtu`. Unter Windows ist das bisher nicht getestet.
