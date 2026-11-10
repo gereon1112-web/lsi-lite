@@ -4,65 +4,131 @@
 
 Lastoptimiert slicen aus einem FEM-Ergebnis: Aus einer `.vtu`-Datei mit Spannungsfeld
 entsteht G-Code für einen 3-Achs-Drucker, dessen Schichten der Zugspannung folgen.
-Eine einzige Python-Datei (`lsi_lite.py`), gedacht für Google Colab.
+Das Verfahren steht in einer einzigen Python-Datei (`lsi_lite.py`), die Bedienoberfläche
+im Notebook `LSI_lite.ipynb`. Das Notebook läuft in Google Colab und lokal in
+VS Code oder JupyterLab.
 
 LSI Lite ist die verkleinerte Fassung des *Load-Optimized Surface Interpolator* (LSI)
 aus der Diplomarbeit von Gereon Zündorf. Das Grundprinzip ist dasselbe, der Umfang
 ein Zwanzigstel (siehe [Was vereinfacht ist](#was-vereinfacht-ist)).
 
-## Benutzung in Google Colab
+## Benutzung im Notebook
 
-Du brauchst nur ein Google-Konto. Zum Ausprobieren sind zwei Beispiele dabei; für eigene Bauteile deine `.vtu`-Datei.
+Zwei Wege, dasselbe Notebook:
 
-1. Notebook öffnen:
-   <https://colab.research.google.com/github/gereon1112-web/lsi-lite/blob/main/LSI_lite.ipynb>
-   (oder in Colab *Datei → Notebook öffnen → GitHub*, `gereon1112-web/lsi-lite` eingeben).
-2. **Zelle 1 „Einrichten"** mit ▶ starten. Beim ersten Mal fragt Colab, ob du dem
-   Notebook vertraust: *Trotzdem ausführen*. Nach etwa 30 Sekunden steht „Bereit."
-3. **Zelle 2 „Eingabe"**: rechts ein Beispiel wählen (Tragwerk oder Biegebalken) oder
-   „eigene Datei hochladen", dann ▶ und bei eigener Datei *Dateien auswählen*.
-4. **Zelle 3 „Einstellungen und Rechnen"**: das Formular rechts ausfüllen
-   (Tabelle unten), dann ▶. Je nach Bauteil dauert das 5 Sekunden bis 2 Minuten.
-   Ausgegeben werden ein Protokoll und ein Vorschaubild:
-   links ein Schnitt durch die Schichten (rot die lastoptimierte Mittelschicht, blau
-   die Zugrichtung aus dem FEM-Ergebnis), rechts, wie weit die Mittelschicht nach oben
-   oder unten ausweicht.
-5. **Zelle 4 „Ansehen"** zeigt die Bahnen in 3D, mit der Maus drehbar, Farbe = Schicht.
-   Schwarze Striche zeigen die Zugrichtung (größte Hauptspannung, länger = mehr Zug);
-   ein Klick auf „Zugrichtung" in der Legende blendet sie aus. Mit „bis_schicht"
-   (z. B. auf die Hälfte) schaust du ins Innere und siehst, ob die Mittelschicht
-   den Strichen folgt.
-6. **Zelle 5 „Herunterladen"** speichert den G-Code (`<name>_lite.gcode`).
+- **Im Browser (Google Colab):** auf die Schaltfläche *In Colab öffnen* oben klicken.
+  Nötig ist nur ein Google-Konto, installiert wird nichts.
+- **Auf dem eigenen Rechner (VS Code):** Ordner klonen und das Notebook darin öffnen,
+  siehe [Notebook in VS Code](#notebook-in-vs-code).
 
-Ändern sich nur Einstellungen, genügt es, ab Zelle 3 neu zu starten.
+Das Notebook hat zwei Zellen; beide nacheinander mit ▶ starten.
+
+1. **Einrichten.** In Colab holt die Zelle die fehlenden Pakete und das Programm von
+   GitHub (etwa 30 Sekunden; beim ersten Mal *Trotzdem ausführen* bestätigen). Lokal
+   liegt das Programm schon im Ordner; fehlen Pakete, installiert die Zelle sie
+   einmalig aus `requirements.txt`.
+2. **LSI Lite** zeigt die Bedienoberfläche (ihr Code ist eingeklappt):
+   - **Bauteil**: eines der Beispiele (Tragwerk, Biegebalken) oder eine eigene `.vtu`
+     hochladen; dazu die Baurichtung.
+   - **Schichten**: Düsendurchmesser und größte Neigung. Schichthöhe und Bahnbreite
+     ergeben sich aus der Düse und stehen darunter.
+   - **Füllung** und **Drucker**: Füllart, Dichte, Wände, Bettgröße, Material.
+   - **Slicen** startet die Rechnung. Eine Schrittliste zeigt, welcher Schritt gerade
+     läuft, bei der Mittelschicht die Stufe, beim Bahnenlegen die Schicht, und wie lange
+     jeder erledigte Schritt gedauert hat. Je nach Bauteil dauert das 5 Sekunden bis
+     2 Minuten.
+   - Danach drei Reiter: **Protokoll** (Tabelle unten), **Schnitt** (links ein Schnitt
+     durch alle Schichten, rot die lastoptimierte Mittelschicht, blau die Zugrichtung;
+     rechts, wie weit die Mittelschicht nach oben oder unten ausweicht) und
+     **3D-Ansicht** (alle Bahnen, mit der Maus drehbar, Farbe = Schicht; schwarze
+     Striche = Zugrichtung, länger heißt mehr Zug, ein Klick auf die Legende blendet sie
+     aus).
+   - Der G-Code (`<name>_lite.gcode`) wird in Colab heruntergeladen; lokal steht sein
+     Pfad unter der Schrittliste.
+
+Für neue Einstellungen genügt ein weiterer Klick auf *Slicen*.
 
 **Was das Protokoll sagt:**
 
 | Zeile | Bedeutung |
 | --- | --- |
-| Zug in der Schicht 21 % → 28 % | Anteil der Zugspannung, der in der Schicht liegt statt quer durch die Lagenfuge zu ziehen – vor und nach der Optimierung |
+| Stufe 1 … 5: Versatz … | wie weit sich die Mittelschicht in jeder Stufe noch ändert |
+| Zug in der Schicht 21 % → 78 % | Anteil der Zugspannung, der in der Schicht liegt statt quer durch die Lagenfuge zu ziehen, vor und nach der Optimierung |
 | Neigung max | steilste Stelle der Mittelschicht; höchstens die eingestellte Grenze |
-| Dicke 0.19 .. 0.30 mm | Schichtdicke senkrecht zur Schicht (5. bis 95. Perzentil) |
+| Dicke 0.10 .. 0.29 mm | Schichtdicke senkrecht zur Schicht (5. bis 95. Perzentil) |
 | Druckzeit etwa … min | reine Fahrzeit aus Weglänge und Vorschub; ohne Beschleunigung, der Druck dauert real länger |
-| ACHTUNG: Schichtdicke … | die Schichten verlassen das Fenster – Fenster weiten oder Neigung senken |
-| ACHTUNG: Überhang … | Teile der Schichten hängen in der Luft – andere Baurichtung wählen |
+| ACHTUNG: Schichtdicke … | die Schichten verlassen das Fenster; Neigung senken |
+| ACHTUNG: Überhang … | Teile der Schichten hängen in der Luft; andere Baurichtung wählen |
 
 ## Einstellungen
 
 | Feld | Bedeutung | Vorgabe |
 | --- | --- | --- |
-| duese | Düsendurchmesser in mm | 0.4 |
-| schicht_min, schicht_max | dünnste und dickste Schicht, die der Drucker sauber legt | 0.1, 0.35 |
-| neigung_max | wie steil eine Schicht stehen darf (Grad); kleiner als der Freiwinkel von Düse und Heizblock | 20 |
-| fuellung | `konzentrisch` (Ringe parallel zum Rand), `zigzag` (Linien, je Schicht um 90° gedreht) oder `explizit` (Stromlinien entlang der Zugrichtung: beste Ausrichtung, aber Lücken, wo Linien auseinanderlaufen) | konzentrisch |
-| fuelldichte | 100 = massiv, 0 = nur Wände | 100 |
-| waende | Anzahl Wandbahnen | 1 |
-| drucker | legt die Bettgröße fest | 220 x 220 |
-| material | Temperaturen, Lüfter, Rückzug | PLA |
-| baurichtung | welche Achse des FEM-Modells beim Druck nach oben zeigt; `auto` = bei den Beispielen deren Richtung, sonst +z | auto |
+| Düse | Düsendurchmesser in mm; legt Schichthöhe und Bahnbreite fest (siehe unten) | 0.4 |
+| Neigung max | wie steil eine Schicht stehen darf, in Grad; [so ermittelst du den Wert](#maximale-neigung-ermitteln) | 20 |
+| Füllung | `konzentrisch` (Ringe parallel zum Rand), `zigzag` (Linien, je Schicht um 90° gedreht) oder `explizit` (Stromlinien entlang der Zugrichtung: beste Ausrichtung, aber Lücken, wo Linien auseinanderlaufen) | konzentrisch |
+| Dichte | 100 = massiv, 0 = nur Wände | 100 |
+| Wände | Anzahl Wandbahnen | 1 |
+| Drucker | legt die Bettgröße fest | 220 x 220 |
+| Material | Temperaturen, Lüfter, Rückzug | PLA |
+| Baurichtung | welche Achse des FEM-Modells beim Druck nach oben zeigt; `auto` = bei den Beispielen deren Richtung, sonst +z | auto |
 
-Die Bahnbreite ist Düse + größte Schichthöhe (wie im Original). Weitere feste Werte
-(Geschwindigkeiten, Rückzug, Start-G-Code) stehen oben in `lsi_lite.py`.
+**Schichthöhe und Bahnbreite aus der Düse.** Es gilt die übliche Faustregel: Eine Schicht
+ist mindestens 25 % und höchstens 75 % des Düsendurchmessers dick. Darunter fließt das
+Material nicht mehr gleichmäßig, darüber drückt die Düse den Strang nicht mehr an.
+Die Schichten werden im Mittel 50 % dick. Die Bahn ist so breit wie Düse plus größte
+Schichthöhe; so liegt der Strang auch an der dicksten Stelle frei und wird sonst
+überall angedrückt (wie im Original).
+
+| Düse | Schicht min … max | im Mittel | Bahnbreite |
+| --- | --- | --- | --- |
+| 0.4 mm | 0.10 … 0.30 mm | 0.20 mm | 0.70 mm |
+| 0.6 mm | 0.15 … 0.45 mm | 0.30 mm | 1.05 mm |
+
+Weitere feste Werte (Geschwindigkeiten, Rückzug, Start-G-Code, Stufen der Mittelschicht)
+stehen oben in `lsi_lite.py`.
+
+### Maximale Neigung ermitteln
+
+Ein 3-Achs-Drucker hält die Düse immer senkrecht. Steht eine Schicht schräg, darf die
+Düse beim Drucken nirgends an Material stoßen, das schon liegt. Zwei Teile des Druckers
+setzen dafür eine Grenze: der **Düsenkegel** (Düse und Heizblock) und darüber der
+**Schlitten** mit dem Lüfter.
+
+<p align="center"><img src="bilder/neigungsgrenze.svg" alt="Neigungsgrenze am Düsenkegel und am Schlitten" width="720"></p>
+
+Die erlaubte Neigung ist der kleinere von zwei Winkeln
+(Etienne u. a. 2019, CurviSlicer; Anhang der Diplomarbeit):
+
+    Neigung max = kleinerer Wert von  ϑ_D  und  arctan(h_S / ℓ_B)
+
+- **ϑ_D, Winkel des Düsenkegels:** Von der Düsenspitze zur unteren Ecke des Heizblocks
+  (oder der Silikonsocke) gezogen, steigt eine Linie um diesen Winkel gegen die Waagerechte.
+  Messen: wie weit die Unterkante des Heizblocks über der Düsenspitze liegt (a) und wie
+  weit die Ecke waagerecht von der Düsenmitte entfernt ist (b). Dann ist
+  ϑ_D = arctan(a / b).
+- **h_S, Höhe des Schlittens:** Abstand von der Düsenspitze zum tiefsten Punkt von
+  Schlitten, Lüfterkanal oder Kabelführung.
+- **ℓ_B, Größe des Bauteils:** seine größte Ausdehnung auf dem Bett. Eine Schicht, die
+  über die ganze Länge gleichmäßig ansteigt, liegt am anderen Ende um
+  ℓ_B · tan(Neigung) höher; das darf nicht mehr als h_S sein.
+
+Kleine Bauteile begrenzt der Düsenkegel, große der Schlitten.
+
+**Beispiel** (angenommene Werte, nicht an einem bestimmten Drucker gemessen): Die Düse
+ragt a = 5 mm unter dem Heizblock hervor, die Ecke liegt b = 12 mm neben der
+Düsenmitte, der Lüfterkanal hängt h_S = 20 mm über der Spitze.
+
+| Bauteil | Kegel ϑ_D | Schlitten arctan(h_S / ℓ_B) | Neigung max |
+| --- | --- | --- | --- |
+| 30 mm groß | arctan(5/12) = 22.6° | arctan(20/30) = 33.7° | **22.6°** (Kegel) |
+| Biegebalken, 110 mm | 22.6° | arctan(20/110) = 10.3° | **10.3°** (Schlitten) |
+
+Die Schlittengrenze ist vorsichtig gerechnet: Sie nimmt eine Schicht an, die über das
+ganze Bauteil gleichmäßig ansteigt. Die Schichten von LSI Lite wellen sich auf und ab
+und steigen deshalb meist weniger hoch, als die Formel annimmt. Entscheidend ist,
+dass der Höhenunterschied innerhalb einer Schicht unter h_S bleibt. Wer sicher gehen
+will, nimmt trotzdem den Wert der Formel.
 
 **Die Eingabedatei:** ein Tetraedernetz (C3D4 oder C3D10) mit Spannungstensor je Knoten,
 z. B. der VTU-Export eines CalculiX-Ergebnisses aus FreeCAD (Felder
@@ -80,18 +146,55 @@ quadratische Tetraeder):
 
 ## Benutzung auf dem eigenen Rechner
 
-Voraussetzung: Python 3.12 oder neuer (getestet mit 3.12 und 3.14).
+Voraussetzung: Python 3.12 oder neuer (getestet mit 3.13 und 3.14) und Git.
+
+### Notebook in VS Code
+
+1. **Ordner klonen**, im Terminal (Linux und Windows gleich):
+   `git clone https://github.com/gereon1112-web/lsi-lite.git`
+   (oder in VS Code: *Ansicht → Befehlspalette → Git: Klonen*, dieselbe Adresse).
+2. In VS Code die Erweiterung **Jupyter** (von Microsoft) installieren; sie bringt die
+   Python-Erweiterung mit.
+3. Den Ordner `lsi-lite` öffnen (*Datei → Ordner öffnen*) und `LSI_lite.ipynb` anklicken.
+4. **Umgebung anlegen**, einmalig: oben rechts *Kernel auswählen* → *Python-Umgebungen* →
+   *Python-Umgebung erstellen* → *Venv* → eine Python-Version wählen → bei
+   `requirements.txt` den Haken setzen → *OK*. VS Code legt den Ordner `.venv` an und
+   installiert die Pakete (etwa 1 Minute). Beim nächsten Öffnen ist `.venv` schon gewählt.
+5. Beide Zellen mit ▶ starten (oder *Alle ausführen*). Fragt VS Code nach `ipykernel`,
+   mit *Installieren* bestätigen. Die Oberfläche erscheint unter Zelle 2, genau wie in Colab.
+
+Wurde in Schritt 4 der Haken vergessen, installiert Zelle 1 die fehlenden Pakete selbst.
+
+Eigene `.vtu`-Dateien lädt man auch lokal über *.vtu wählen* hoch; sie landen im Ordner
+`eingabe/`. Der G-Code liegt neben der `.vtu` (bei den Beispielen in `beispiele/`).
+Neuen Stand holen: `git pull` im Ordner.
+
+### Umgebung von Hand (für JupyterLab und die Kommandozeile)
 
 | Schritt | Linux | Windows |
 | --- | --- | --- |
 | Umgebung anlegen | `python3 -m venv .venv` | `py -m venv .venv` |
 | Pakete installieren | `.venv/bin/pip install -r requirements.txt` | `.venv\Scripts\pip install -r requirements.txt` |
+
+### Notebook in JupyterLab
+
+| Schritt | Linux | Windows |
+| --- | --- | --- |
+| JupyterLab einmalig dazu installieren | `.venv/bin/pip install jupyterlab==4.6.6` | `.venv\Scripts\pip install jupyterlab==4.6.6` |
+| starten, dann `LSI_lite.ipynb` öffnen | `.venv/bin/jupyter lab` | `.venv\Scripts\jupyter lab` |
+
+### Ohne Notebook, von der Kommandozeile
+
+| Schritt | Linux | Windows |
+| --- | --- | --- |
 | `.vtu` in den Ordner `eingabe/` legen, dann starten | `.venv/bin/python lsi_lite.py` | `.venv\Scripts\python lsi_lite.py` |
 | oder mit Pfad | `.venv/bin/python lsi_lite.py teil.vtu` | `.venv\Scripts\python lsi_lite.py teil.vtu` |
 | Beispiel | `.venv/bin/python lsi_lite.py beispiele/tragwerk.vtu` | `.venv\Scripts\python lsi_lite.py beispiele\tragwerk.vtu` |
 
 Die Einstellungen stehen dann oben in `lsi_lite.py` unter `SETTINGS`. G-Code und
-Vorschaubild landen neben der `.vtu`. Unter Windows ist das bisher nicht getestet.
+Vorschaubild landen neben der `.vtu`.
+
+Unter Windows ist das alles bisher nicht getestet.
 
 ## Wie es rechnet
 
@@ -101,6 +204,11 @@ Vorschaubild landen neben der `.vtu`. Unter Windows ist das bisher nicht geteste
    Hauptspannung in ihr liegt, statt quer durch die Lagenfuge zu ziehen. Das ist eine
    Ausgleichsrechnung mit genau zwei Grenzen: Neigung und Auslenkung (aus dem
    Schichthöhenfenster). Gewichtet wird nur Zug.
+   Das geschieht in **5 Stufen**: Die Zugrichtung wird jedes Mal dort neu abgelesen, wo
+   die Fläche inzwischen liegt, nicht nur auf der ebenen Ausgangshöhe. Jede Stufe
+   übernimmt die Hälfte der neuen Verformung, damit die Fläche nicht hin- und herspringt.
+   Das Ergebnis ist die Lösung der letzten Stufe. Ändert sich nichts mehr, endet die
+   Rechnung früher.
 3. **Schichten dazwischen.** Ein Feld u ist 0 auf dem Bett, 1 auf der Mittelschicht
    (bzw. Mittelschicht und Deckel); dazwischen ist jeder Punkt das Mittel seiner Nachbarn
    (Laplace-Gleichung, lineare finite Elemente). Die Schichten sind die Flächen gleichen
@@ -118,12 +226,14 @@ Vorschaubild landen neben der `.vtu`. Unter Windows ist das bisher nicht geteste
 | --- | --- | --- |
 | Feld u | Tetraedernetz aus tetgen | Säulennetz über dem Raster; gleiche Gleichung, Elemente und Randwerte |
 | Vorgabeflächen | Bauteilunter- und -oberseite wählbar | Unterseite = Bett (eben), Oberseite nicht vorgegeben |
+| Schichthöhe | Fenster frei einstellbar | aus der Düse (25 bis 75 %) |
 | Bahnabstand | auf der Fläche (geodätisch) | in der Draufsicht; auf einer um 20° geneigten Stelle liegen Bahnen 6 % weiter auseinander, die Menge stimmt trotzdem, die Raupe wird dort etwas breiter und flacher |
 | Füllarten | konzentrisch, zigzag, lastgeführt (explizit, implizit) | konzentrisch, zigzag, explizit |
 | Drucker | 3-Achs und 6-Achs-Roboter (RAPID), Draht | nur 3-Achs |
 | Prüfungen | Druckbarkeitskriterien K1 bis K7 | Schichthöhenfenster, Überhang, Bettgröße |
 
-**Vergleich mit dem Original** (gleiche Bauteile, gleiche Grenzen, 2026-11-08):
+**Vergleich mit dem Original** (gleiche Bauteile, gleiche Grenzen, Schichthöhe 0.1 bis
+0.35 mm, Mittelschicht einstufig, 2026-11-08):
 
 | | Zug in der Schicht vorher → nachher | Neigung max | Neigung der Schicht bei 60 % / 70 % der Quaderhöhe |
 | --- | --- | --- | --- |
@@ -135,8 +245,23 @@ Vorschaubild landen neben der `.vtu`. Unter Windows ist das bisher nicht geteste
 Die Schichten klingen nach oben so ab wie im Feld des Originals; eine gleichmäßige
 Überblendung (wie *Tween* in Pufferfish) hätte beim Tragwerk bei 70 % noch etwa 11°.
 
+**Mit 5 Stufen** (Düse 0.4, also Schichthöhe 0.1 bis 0.3 mm, Neigung 20°, 2026-11-10):
+
+| | Zug in der Schicht vorher → nachher | Neigung max | Rechenzeit |
+| --- | --- | --- | --- |
+| Tragwerk | 82 % → 96 % | 19.9° | 38 s |
+| Biegebalken | 21 % → 78 % | 18.5° | 3 s |
+
+Ein Teil des Gewinns kommt daher, dass die Mittelschicht in Gegenden mit mehr Zug
+wandert, die dann stärker zählen; der Wert misst also nicht allein die Ausrichtung.
+Beim Tragwerk ist die Fläche nach 5 Stufen noch nicht ganz zur Ruhe gekommen
+(letzte Änderung 1.8 mm), und die Schichtdicke reicht bis 0.33 mm, etwas über das
+Fenster hinaus (das Protokoll warnt).
+
 ## Grenzen
 
 - Keine Stützen. Überhänge werden gemeldet, nicht behoben.
 - Keine Kollisionsprüfung für Düse und Heizblock über die Neigungsgrenze hinaus.
 - Bisher nur am Bildschirm geprüft (G-Code-Viewer des LSI), noch nicht gedruckt.
+- Die Notebook-Oberfläche ist lokal mit JupyterLab-Kernel getestet; in Colab und in
+  VS Code selbst noch nicht angesehen.

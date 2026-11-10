@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" font-family="system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13">
+<title>Neigungsgrenze am Duesenkegel und am Schlitten</title>
+<style>
+.ink{fill:#24292f} .soft{fill:#57606a}
+.line{stroke:#24292f;stroke-width:1.4;fill:none} .thin{stroke:#8c959f;stroke-width:1;fill:none}
+.dash{stroke:#0969da;stroke-width:1.8;stroke-dasharray:7 5;fill:none} .accent{fill:#0969da}
+.arcb{stroke:#0969da;stroke-width:1.4;fill:none} .arcg{stroke:#24292f;stroke-width:1.2;fill:none}
+.part{fill:#d0d7de;stroke:#8c959f;stroke-width:1} .layer{stroke:#afb8c1;stroke-width:1;fill:none}
+.block{fill:#8c959f} .carriage{fill:#57606a} .cone{fill:#0969da;fill-opacity:.10}
+.dim{stroke:#57606a;stroke-width:1;fill:none}
+@media (prefers-color-scheme: dark) {
+ .ink{fill:#e6edf3} .soft{fill:#9198a1}
+ .line{stroke:#e6edf3} .thin{stroke:#6e7681} .dash{stroke:#4493f8} .accent{fill:#4493f8}
+ .arcb{stroke:#4493f8} .arcg{stroke:#e6edf3}
+ .part{fill:#30363d;stroke:#6e7681} .layer{stroke:#484f58}
+ .block{fill:#6e7681} .carriage{fill:#9198a1} .cone{fill:#4493f8;fill-opacity:.16} .dim{stroke:#9198a1}
+}
+</style>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 Z" class="soft"/></marker></defs>
+<!-- Schlitten und Heizblock -->
+<rect class="carriage" x="70" y="54" width="600" height="16" rx="3"/>
+<text class="ink" x="78" y="46">Schlitten, Lüfter</text>
+<rect class="block" x="152" y="147" width="76" height="38" rx="2"/>
+<rect class="block" x="181" y="70" width="18" height="77"/>
+<text class="ink" x="142" y="171" text-anchor="end">Heizblock</text>
+<path class="block" d="M179,185 L201,185 L193,210 L187,210 Z"/>
+<!-- Duesenkegel -->
+<path class="cone" d="M190,210 L228,185 L152,185 Z"/>
+<path class="thin" d="M122,167.6 L190,210 L258,167.6" stroke-dasharray="3 3"/>
+<!-- gedrucktes Bauteil -->
+<path class="part" d="M196,211.1 L610,79.4 L610,262 L196,262 Z"/><path class="layer" d="M196,222.1 L610,90.4"/><path class="layer" d="M196,233.1 L610,101.4"/><path class="layer" d="M196,244.1 L610,112.4"/><path class="layer" d="M196,255.1 L610,123.4"/><path class="layer" d="M196,266.1 L610,134.4"/>
+<text class="soft" x="440.0" y="248" text-anchor="middle">gedruckte Schichten</text>
+<!-- Waagerechte und Grenzlinie -->
+<path class="thin" d="M80,210 L340,210"/>
+<path class="dash" d="M190,210 L630,70"/>
+<circle class="accent" cx="630" cy="70" r="4"/>
+<text class="accent" x="630" y="46" text-anchor="end">hier stößt der Schlitten an</text>
+<path class="arcb" d="M310.0,210.0 A120,120 0 0 0 304.4,173.6"/>
+<text class="accent" x="316" y="202" font-style="italic">ϑ<tspan font-size="10" dy="3">max</tspan></text>
+<path class="arcg" d="M128.0,210.0 A62,62 0 0 1 136.3,178.9"/>
+<text class="ink" x="120" y="198" text-anchor="end" font-style="italic">ϑ<tspan font-size="10" dy="3">D</tspan></text>
+<!-- Masse -->
+<path class="dim" d="M190,280 L630,280" marker-start="url(#ar)" marker-end="url(#ar)"/>
+<path class="thin" d="M630,74 L630,286"/><path class="thin" d="M190,214 L190,286"/>
+<text class="ink" x="410.0" y="295" text-anchor="middle" font-style="italic">ℓ<tspan font-size="10" dy="3">B</tspan><tspan dy="-3" font-style="normal"> größte Ausdehnung des Bauteils</tspan></text>
+<path class="dim" d="M652,210 L652,70" marker-start="url(#ar)" marker-end="url(#ar)"/>
+<path class="thin" d="M614,210 L658,210"/>
+<text class="ink" x="660" y="144.0" font-style="italic">h<tspan font-size="10" dy="3">S</tspan></text>
+</svg>
