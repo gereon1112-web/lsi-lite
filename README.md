@@ -4,9 +4,13 @@
 
 Lastoptimiert slicen aus einem FEM-Ergebnis: Aus einer `.vtu`-Datei mit Spannungsfeld
 entsteht G-Code für einen 3-Achs-Drucker, dessen Schichten der Zugspannung folgen.
-Das Verfahren steht in einer einzigen Python-Datei (`lsi_lite.py`), die Bedienoberfläche
-im Notebook `LSI_lite.ipynb`. Das Notebook läuft in Google Colab und lokal in
-VS Code oder JupyterLab.
+Das Verfahren steht in einer einzigen Python-Datei (`lsi_lite.py`), bedient wird es über
+das Notebook `LSI_lite.ipynb`.
+
+**Direkt im Browser starten, ohne Installation:**
+<https://colab.research.google.com/github/gereon1112-web/lsi-lite/blob/main/LSI_lite.ipynb>
+(oder die Schaltfläche *In Colab öffnen* oben). Nötig ist nur ein Google-Konto.
+Lokal läuft dasselbe Notebook in VS Code, siehe [Notebook in VS Code](#notebook-in-vs-code).
 
 LSI Lite ist die verkleinerte Fassung des *Load-Optimized Surface Interpolator* (LSI)
 aus der Diplomarbeit von Gereon Zündorf. Das Grundprinzip ist dasselbe, der Umfang
@@ -16,37 +20,35 @@ ein Zwanzigstel (siehe [Was vereinfacht ist](#was-vereinfacht-ist)).
 
 Zwei Wege, dasselbe Notebook:
 
-- **Im Browser (Google Colab):** auf die Schaltfläche *In Colab öffnen* oben klicken.
-  Nötig ist nur ein Google-Konto, installiert wird nichts.
+- **Im Browser (Google Colab):** den Link oben öffnen. Die Einstellungen stehen als
+  Formular (Auswahllisten, Schieberegler) rechts neben jeder Zelle.
 - **Auf dem eigenen Rechner (VS Code):** Ordner klonen und das Notebook darin öffnen,
-  siehe [Notebook in VS Code](#notebook-in-vs-code).
+  siehe [Notebook in VS Code](#notebook-in-vs-code). VS Code zeigt die Colab-Formulare
+  nicht an; dieselben Einstellungen stehen dort als Zeilen im Code
+  (`duese = 0.4  #@param ...`) und werden direkt dort geändert.
 
-Das Notebook hat zwei Zellen; beide nacheinander mit ▶ starten.
+Die Zellen der Reihe nach mit ▶ starten (oder *Alle ausführen*):
 
 1. **Einrichten.** In Colab holt die Zelle die fehlenden Pakete und das Programm von
    GitHub (etwa 30 Sekunden; beim ersten Mal *Trotzdem ausführen* bestätigen). Lokal
    liegt das Programm schon im Ordner; fehlen Pakete, installiert die Zelle sie
    einmalig aus `requirements.txt`.
-2. **LSI Lite** zeigt die Bedienoberfläche (ihr Code ist eingeklappt):
-   - **Bauteil**: eines der Beispiele (Tragwerk, Biegebalken) oder eine eigene `.vtu`
-     hochladen; dazu die Baurichtung.
-   - **Schichten**: Düsendurchmesser und größte Neigung. Schichthöhe und Bahnbreite
-     ergeben sich aus der Düse und stehen darunter.
-   - **Füllung** und **Drucker**: Füllart, Dichte, Wände, Bettgröße, Material.
-   - **Slicen** startet die Rechnung. Eine Schrittliste zeigt, welcher Schritt gerade
-     läuft, bei der Mittelschicht die Stufe, beim Bahnenlegen die Schicht, und wie lange
-     jeder erledigte Schritt gedauert hat. Je nach Bauteil dauert das 5 Sekunden bis
-     2 Minuten.
-   - Danach drei Reiter: **Protokoll** (Tabelle unten), **Schnitt** (links ein Schnitt
-     durch alle Schichten, rot die lastoptimierte Mittelschicht, blau die Zugrichtung;
-     rechts, wie weit die Mittelschicht nach oben oder unten ausweicht) und
-     **3D-Ansicht** (alle Bahnen, mit der Maus drehbar, Farbe = Schicht; schwarze
-     Striche = Zugrichtung, länger heißt mehr Zug, ein Klick auf die Legende blendet sie
-     aus).
-   - Der G-Code (`<name>_lite.gcode`) wird in Colab heruntergeladen; lokal steht sein
-     Pfad unter der Schrittliste.
+2. **Eingabe.** Ein Beispiel (Tragwerk, Biegebalken) oder *eigene Datei*: In Colab
+   erscheint ein Knopf zum Hochladen, lokal kommt die `.vtu` in den Ordner `eingabe/`.
+3. **Einstellungen und Rechnen.** Düse, größte Neigung, Füllung, Drucker, Material,
+   Baurichtung (Tabelle unten), dann ▶. Eine Schrittliste zeigt, welcher Schritt gerade
+   läuft (bei der Mittelschicht die Stufe, beim Bahnenlegen die Schicht) und wie lange
+   jeder erledigte Schritt gedauert hat; darunter steht das Protokoll. Je nach Bauteil
+   dauert das 5 Sekunden bis 2 Minuten.
+4. **Ansehen.** Oben ein Schnitt durch alle Schichten (rot die lastoptimierte
+   Mittelschicht, blau die Zugrichtung) und wie weit die Mittelschicht nach oben oder
+   unten ausweicht. Darunter alle Bahnen in 3D, mit der Maus drehbar, Farbe = Schicht;
+   schwarze Striche = Zugrichtung, länger heißt mehr Zug, ein Klick auf die Legende
+   blendet sie aus.
+5. **Herunterladen.** In Colab lädt die Zelle den G-Code (`<name>_lite.gcode`) herunter;
+   lokal nennt sie den Pfad (neben der `.vtu`, bei den Beispielen in `beispiele/`).
 
-Für neue Einstellungen genügt ein weiterer Klick auf *Slicen*.
+Ändern sich nur Einstellungen, genügt es, ab Zelle 3 neu zu starten.
 
 **Was das Protokoll sagt:**
 
@@ -64,14 +66,14 @@ Für neue Einstellungen genügt ein weiterer Klick auf *Slicen*.
 
 | Feld | Bedeutung | Vorgabe |
 | --- | --- | --- |
-| Düse | Düsendurchmesser in mm; legt Schichthöhe und Bahnbreite fest (siehe unten) | 0.4 |
-| Neigung max | wie steil eine Schicht stehen darf, in Grad; [so ermittelst du den Wert](#maximale-neigung-ermitteln) | 20 |
-| Füllung | `konzentrisch` (Ringe parallel zum Rand), `zigzag` (Linien, je Schicht um 90° gedreht) oder `explizit` (Stromlinien entlang der Zugrichtung: beste Ausrichtung, aber Lücken, wo Linien auseinanderlaufen) | konzentrisch |
-| Dichte | 100 = massiv, 0 = nur Wände | 100 |
-| Wände | Anzahl Wandbahnen | 1 |
-| Drucker | legt die Bettgröße fest | 220 x 220 |
-| Material | Temperaturen, Lüfter, Rückzug | PLA |
-| Baurichtung | welche Achse des FEM-Modells beim Druck nach oben zeigt; `auto` = bei den Beispielen deren Richtung, sonst +z | auto |
+| duese | Düsendurchmesser in mm; legt Schichthöhe und Bahnbreite fest (siehe unten) | 0.4 |
+| neigung_max | wie steil eine Schicht stehen darf, in Grad; [so ermittelst du den Wert](#maximale-neigung-ermitteln) | 20 |
+| fuellung | `konzentrisch` (Ringe parallel zum Rand), `zigzag` (Linien, je Schicht um 90° gedreht) oder `explizit` (Stromlinien entlang der Zugrichtung: beste Ausrichtung, aber Lücken, wo Linien auseinanderlaufen) | konzentrisch |
+| fuelldichte | 100 = massiv, 0 = nur Wände | 100 |
+| waende | Anzahl Wandbahnen | 1 |
+| drucker | legt die Bettgröße fest | 220 x 220 |
+| material | Temperaturen, Lüfter, Rückzug | PLA |
+| baurichtung | welche Achse des FEM-Modells beim Druck nach oben zeigt; `auto` = bei den Beispielen deren Richtung, sonst +z | auto |
 
 **Schichthöhe und Bahnbreite aus der Düse.** Es gilt die übliche Faustregel: Eine Schicht
 ist mindestens 25 % und höchstens 75 % des Düsendurchmessers dick. Darunter fließt das
@@ -160,13 +162,13 @@ Voraussetzung: Python 3.12 oder neuer (getestet mit 3.13 und 3.14) und Git.
    *Python-Umgebung erstellen* → *Venv* → eine Python-Version wählen → bei
    `requirements.txt` den Haken setzen → *OK*. VS Code legt den Ordner `.venv` an und
    installiert die Pakete (etwa 1 Minute). Beim nächsten Öffnen ist `.venv` schon gewählt.
-5. Beide Zellen mit ▶ starten (oder *Alle ausführen*). Fragt VS Code nach `ipykernel`,
-   mit *Installieren* bestätigen. Die Oberfläche erscheint unter Zelle 2, genau wie in Colab.
+5. Die Zellen mit ▶ starten (oder *Alle ausführen*). Fragt VS Code nach `ipykernel`,
+   mit *Installieren* bestätigen. Einstellungen ändert man in Zelle 2 und 3 direkt im Code.
 
 Wurde in Schritt 4 der Haken vergessen, installiert Zelle 1 die fehlenden Pakete selbst.
 
-Eigene `.vtu`-Dateien lädt man auch lokal über *.vtu wählen* hoch; sie landen im Ordner
-`eingabe/`. Der G-Code liegt neben der `.vtu` (bei den Beispielen in `beispiele/`).
+Eigene `.vtu`-Dateien kommen lokal in den Ordner `eingabe/` (bei mehreren gilt die
+neueste). Der G-Code liegt neben der `.vtu` (bei den Beispielen in `beispiele/`).
 Neuen Stand holen: `git pull` im Ordner.
 
 ### Umgebung von Hand (für JupyterLab und die Kommandozeile)
@@ -263,5 +265,5 @@ Fenster hinaus (das Protokoll warnt).
 - Keine Stützen. Überhänge werden gemeldet, nicht behoben.
 - Keine Kollisionsprüfung für Düse und Heizblock über die Neigungsgrenze hinaus.
 - Bisher nur am Bildschirm geprüft (G-Code-Viewer des LSI), noch nicht gedruckt.
-- Die Notebook-Oberfläche ist lokal mit JupyterLab-Kernel getestet; in Colab und in
-  VS Code selbst noch nicht angesehen.
+- Das Notebook ist lokal mit einem Jupyter-Kernel getestet; in Colab und in VS Code
+  selbst noch nicht angesehen.
