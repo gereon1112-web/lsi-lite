@@ -33,18 +33,21 @@ die dann stärker zählen. Beim Tragwerk ist die Fläche nach 5 Stufen nicht gan
 
 ## Freie Unterseite statt Bett als Vorgabe (2026-11-10)
 
-Wie `PART_BOUNDS_AS_LAYERS = None` im LSI: Die Schichten beziehen sich auf die
-Quaderunterseite eine halbe Bauteilhöhe unter dem Bett, das Schichthöhenfenster gilt
-weiter. Wo eine gekrümmte Schicht das Bett schneidet, wurden Stellen dünner als die
-kleinste Schichthöhe ausgelassen; die nächste Schicht trug dort die Höhe mit. Gemessen
-wurde zusätzlich der Zug über **alle** Schichten im Bauteil, nicht nur in der Mittelschicht.
+Wie `PART_BOUNDS_AS_LAYERS = None` im LSI: Die Schichten beziehen sich auf den Quaderboden
+eine halbe Bauteilhöhe unter dem Bett; am Bett wird das Schichthöhenfenster je Punkt
+erzwungen ([verfahren.md](verfahren.md#wie-es-rechnet), Schritt 4). Gemessen wurde
+zusätzlich der Zug über **alle** Schichten im Bauteil, nicht nur in der Mittelschicht.
 
 | | Mittelschicht, Bett | Mittelschicht, frei | alle Schichten, Bett | alle Schichten, frei |
 | --- | --- | --- | --- | --- |
 | Biegebalken | 78 % | 83 % | 83.7 % | 82.9 % |
 | Tragwerk | 96 % | 96 % | 81.5 % | 82.3 % |
 
-Die Mittelschicht darf weiter ausweichen (Biegebalken −5.2 statt −3.5 mm), über das
-ganze Bauteil ändert sich nichts. Dazu kamen Überhang-Warnungen (bis 20 % einer Schicht
-ohne Auflage) und Schichten bis 0.39 mm, wo die ausgelassene Höhe mitgetragen wird.
-Deshalb nicht übernommen ([entscheidungen.md](entscheidungen.md#unterseite-bleibt-das-bett-2026-11-10)).
+| mit freier Unterseite | Schichten | Dicke senkrecht zur Schicht (5. bis 95. Perzentil) | tiefster druckender Punkt im G-Code | Rechenzeit |
+| --- | --- | --- | --- | --- |
+| Biegebalken | 87 | 0.10 .. 0.30 mm | 0.10 mm | 3 s |
+| Tragwerk | 64 | 0.10 .. 0.30 mm | 0.10 mm | 38 s |
+
+Die Mittelschicht darf weiter ausweichen (Biegebalken −5.2 statt −3.5 mm); über das ganze
+Bauteil ändert sich wenig. Die Schichtdicke bleibt jetzt im Fenster, vorher reichte sie
+beim Tragwerk bis 0.33 mm.

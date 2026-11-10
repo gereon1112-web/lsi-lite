@@ -36,7 +36,7 @@ Python 3.12 oder neuer. Unter Windows nicht getestet.
 | --- | --- |
 | 1 Einrichten | Pakete und Programm laden |
 | 2 Eingabe | Beispiel (Tragwerk, Biegebalken) oder eigene `.vtu`: in Colab hochladen, lokal in `eingabe/` legen |
-| 3 Einstellungen und Rechnen | Werte setzen, ▶; eine Schrittliste zeigt Fortschritt, Ergebnisse und rot die Warnungen |
+| 3 Einstellungen und Rechnen | Werte setzen, ▶; eine Schrittliste zeigt Fortschritt und Ergebnisse |
 | 4 Ansehen | alle Bahnen in 3D; schwarze Striche = Zugrichtung |
 | 5 Herunterladen | G-Code `<name>_lite.gcode` (lokal: Pfad, neben der `.vtu`) |
 
@@ -49,8 +49,7 @@ Für neue Einstellungen genügt es, ab Zelle 3 neu zu starten.
 | duese | Düsendurchmesser in mm; Schichthöhe = 25 bis 75 % davon, Bahnbreite = Düse + größte Schichthöhe | 0.4 |
 | neigung_max | wie steil eine Schicht stehen darf, in Grad (siehe unten) | 20 |
 | fuellung | `konzentrisch`, `zigzag` oder `explizit` (entlang der Zugrichtung, mit Lücken) | konzentrisch |
-| fuelldichte | 100 = massiv, 0 = nur Wände | 100 |
-| waende | Anzahl Wandbahnen | 1 |
+| fuelldichte | 100 = massiv, 0 = nur die Wand (eine Bahn am Rand) | 100 |
 | drucker | Bettgröße | 220 x 220 |
 | material | Temperaturen, Lüfter, Rückzug | PLA |
 | baurichtung | welche Achse des FEM-Modells nach oben zeigt; `auto` = bei Beispielen deren Richtung, sonst +z | auto |
@@ -71,16 +70,9 @@ Tetraedernetz (C3D4 oder C3D10) mit Spannungstensor je Knoten, z. B. der VTU-Exp
 FreeCAD/CalculiX (Felder „Stress xx component“ usw.) oder ein Feld `stress` mit 6 oder 9
 Komponenten. Maße in mm (Meter werden erkannt). Die Unterseite muss in Baurichtung eben sein.
 
-## Warnungen
-
-| Meldung | was tun |
-| --- | --- |
-| ACHTUNG: Schichtdicke … | Schichten verlassen das Fenster: `neigung_max` senken |
-| ACHTUNG: Überhang … | Teile hängen in der Luft: andere `baurichtung` |
-
 ## Grenzen
 
-- Keine Stützen; Überhänge werden nur gemeldet.
+- Keine Stützen und keine Überhangprüfung: `baurichtung` so wählen, dass nichts in der Luft hängt.
 - Keine Kollisionsprüfung über die Neigungsgrenze hinaus.
 - Noch nicht gedruckt; geprüft am Bildschirm und mit einem lokalen Jupyter-Kernel,
   in Colab und VS Code selbst noch nicht angesehen.

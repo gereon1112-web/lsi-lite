@@ -12,15 +12,18 @@ Warum LSI Lite so gebaut ist, je Entscheidung mit verworfenen Wegen. Messwerte s
 - **Gewählt:** dieselbe Laplace-Gleichung mit denselben Elementen und Randwerten, nur das
   Netz als Säulen über dem Raster. Die Schichten fallen direkt als Höhenfelder an.
 
-## Unterseite bleibt das Bett (2026-11-10)
+## Unterseite frei, Schichthöhe je Punkt erzwungen (2026-11-10)
 
-- **Frage:** Unterseite freigeben wie `PART_BOUNDS_AS_LAYERS = None` im LSI, damit die
-  Mittelschicht nach unten mehr Raum hat.
-- **Problem dabei:** Eine gekrümmte Schicht schneidet das ebene Bett schräg. Gedruckt wird
-  dort der Abstand zwischen Bett und Schicht, und der schrumpft am Schnittrand bis auf null.
-- **Gemessen:** Über alle Schichten kein Gewinn, dazu Überhänge und zu dicke Schichten
-  ([ergebnisse.md](ergebnisse.md#freie-unterseite-statt-bett-als-vorgabe-2026-11-10)).
-- **Gewählt:** Bett als Vorgabe beibehalten.
+- **Problem:** Mit dem Bett als Vorgabe hat die Mittelschicht nach unten wenig Raum. Gibt
+  keine Bauteilseite die Schichten vor (wie `PART_BOUNDS_AS_LAYERS = None` im LSI),
+  schneidet das ebene Bett die gekrümmten Schichten schräg, und der Abstand zwischen Bett
+  und erster gedruckter Schicht schrumpft dort bis auf null.
+- **Verworfen:** zu dünne Stellen auslassen und die nächste Schicht mittragen lassen
+  (Schichten bis 0.39 mm); Warnung zur Schichtdicke (sagt nur, was falsch ist).
+- **Gewählt:** jeden Punkt zwischen kleinster und größter Schichthöhe über dem halten, was
+  darunter liegt. Eine Zeile, gilt am Bett wie überall, und das Fenster kann nicht mehr
+  verlassen werden.
+- **Dazu:** Überhangprüfung entfernt (auf Wunsch; die Baurichtung wählt der Nutzer).
 
 ## Schichthöhe aus der Düse (2026-11-10)
 

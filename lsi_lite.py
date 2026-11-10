@@ -28,8 +28,7 @@ SETTINGS = {
     "nozzle": 0.4,          # Duesendurchmesser in mm, legt Schichthoehe und Bahnbreite fest
     "max_tilt": 20.0,       # groesste Neigung der Schichten in Grad
     "infill": "konzentrisch",   # "konzentrisch", "zigzag" oder "explizit" (Stromlinien)
-    "density": 100,         # Fuelldichte in Prozent, 0 = nur Waende
-    "walls": 1,             # Anzahl Wandbahnen
+    "density": 100,         # Fuelldichte in Prozent, 0 = nur die Wand
     "printer": "220 x 220 (Ender-3 u. a.)",
     "material": "PLA",
     "build_dir": "auto",    # Baurichtung im FEM-Modell: +z, -z, +x, -x, +y, -y;
@@ -434,13 +433,13 @@ def zigzag(area, gap, angle):
 
 
 def layer_paths(region, k, cfg, w, field=None):
-    """Waende und Fuellung einer Schicht in der Draufsicht: Liste (Punkte, geschlossen)."""
-    paths = [(r, True) for i in range(cfg["walls"]) for r in rings(region.buffer(-(i + 0.5) * w))]
+    """Eine Wand und Fuellung einer Schicht in der Draufsicht: Liste (Punkte, geschlossen)."""
+    paths = [(r, True) for r in rings(region.buffer(-0.5 * w))]
     density = 100 if k == 0 else cfg["density"]
     if density <= 0:
         return paths
     gap = w * 100.0 / density
-    inset = cfg["walls"] * w + 0.5 * w
+    inset = 1.5 * w
     if cfg["infill"] == "zigzag":
         return paths + zigzag(region.buffer(-inset + 0.1 * w), gap,
                               math.radians(45.0 + 90.0 * k))
@@ -706,8 +705,8 @@ def check_settings(cfg):
         raise InputError("Fuellung muss 'konzentrisch', 'zigzag' oder 'explizit' sein.")
     if not 0.1 <= cfg["nozzle"] <= 2.0:
         raise InputError("Duesendurchmesser 0.1 .. 2.0 mm.")
-    if not 0 < cfg["max_tilt"] <= 45 or not 0 <= cfg["density"] <= 100 or cfg["walls"] < 0:
-        raise InputError("Neigung 0..45 Grad, Fuelldichte 0..100 %, Waende >= 0.")
+    if not 0 < cfg["max_tilt"] <= 45 or not 0 <= cfg["density"] <= 100:
+        raise InputError("Neigung 0..45 Grad, Fuelldichte 0..100 %.")
     h_min, h_max = LAYER_RATIO[0] * cfg["nozzle"], LAYER_RATIO[1] * cfg["nozzle"]
     return h_min, h_max, 0.5 * (h_min + h_max), cfg["nozzle"] + h_max
 
@@ -742,8 +741,9 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
                  f"{cfg['build_dir']}, {len(fem_pts)} FEM-Knoten, Raster {nx} x {ny}", note=True)
 
     progress.step(1)
-    # Quader wie im Original: doppelte Bauteilhoehe, Mittelschicht mittig, Bett unten
-    z_mid, z_top = 0.5 * height, 1.5 * height
+    # Quader wie im Original: doppelte Bauteilhoehe, Bauteil mittig; keine Bauteilseite gibt
+    # die Schichten vor (PART_BOUNDS_AS_LAYERS = None), das Bett schneidet sie nur ab
+    z_bot, z_mid, z_top = -0.5 * height, 0.5 * height, 1.5 * height
     xy = np.column_stack([np.tile(xs, ny), np.repeat(ys, nx)])
     idx = np.arange(nx * ny).reshape(ny, nx)
     a, b, c, d = idx[:-1, :-1].ravel(), idx[:-1, 1:].ravel(), idx[1:, 1:].ravel(), idx[1:, :-1].ravel()
@@ -756,7 +756,7 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     # Amplitudengrenze aus dem Schichthoehenfenster (src/printability.py)
     thick = h_max / h_nom - 1
     thin = 1 - h_min / (h_nom * math.cos(math.radians(cfg["max_tilt"])))
-    reach_dn, reach_up = z_mid, z_top - z_mid
+    reach_dn, reach_up = z_mid - z_bot, z_top - z_mid
     s_lo = np.full(nx * ny, -min(0.9 * reach_dn, thick * reach_up, thin * reach_dn))
     s_hi = np.full(nx * ny, min(0.9 * reach_up, thick * reach_dn, thin * reach_up))
     # Die Zugrichtung gilt dort, wo die Schicht liegt: jede Stufe tastet sie an der
@@ -783,13 +783,13 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     mid = z_mid + s.reshape(ny, nx)
 
     progress.step(2, "unter der Mittelschicht", 0.0)
-    n_dn = max(1, round(float(mid.mean()) / h_nom))
+    n_dn = max(1, round(float((mid - z_bot).mean()) / h_nom))
     n_up = max(1, round(float((z_top - mid).mean()) / h_nom))
-    below_mid = laplace_layers(xs, ys, np.zeros_like(mid), mid, np.arange(1, n_dn + 1) / n_dn, cell)
+    below_mid = laplace_layers(xs, ys, np.full_like(mid, z_bot), mid, np.arange(1, n_dn + 1) / n_dn, cell)
     progress.step(2, "ueber der Mittelschicht", 0.5)
     above_mid = laplace_layers(xs, ys, mid, np.full_like(mid, z_top), np.arange(1, n_up + 1) / n_up, cell)
     layers = np.concatenate([below_mid, above_mid])
-    layers = layers[layers.min(axis=(1, 2)) < height]
+    layers = layers[(layers.min(axis=(1, 2)) < height) & (layers.max(axis=(1, 2)) > 0)]
 
     progress.step(3)
     step = 0.5 * w
@@ -798,21 +798,23 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     fine = np.stack(np.meshgrid(fy, fx, indexing="ij"), axis=-1).reshape(-1, 2)
     fine_hits = column_hits(hull, fx, fy)
     printed, below, h_rng, pos = [], np.zeros((ny, nx)), [np.inf, 0.0], np.zeros(2)
-    support, loose = None, []
     for k, layer in enumerate(layers):
         progress.step(3, f"Schicht {k + 1} von {len(layers)}", k / len(layers))
-        surf = RegularGridInterpolator((ys, xs), layer, bounds_error=False, fill_value=None)
-        dz = RegularGridInterpolator((ys, xs), layer - below, bounds_error=False, fill_value=None)
-        dist = np.clip(depth(fine_hits, surf(fine)), -step, step).reshape(len(fy), len(fx))
+        # Fenster je Punkt erzwingen: ueber dem, was darunter liegt (Bett oder gedruckte
+        # Schicht), mindestens h_min senkrecht zur Schicht und hoechstens h_max. Das haelt
+        # auch dort, wo die Schicht das Bett schraeg schneidet.
+        stretch = np.hypot(1.0, np.hypot(*np.gradient(layer, ys, xs)))
+        fits = np.clip(layer, below + h_min * stretch, below + h_max)
+        thick_k = fits - below
+        surf = RegularGridInterpolator((ys, xs), fits, bounds_error=False, fill_value=None)
+        dz = RegularGridInterpolator((ys, xs), thick_k, bounds_error=False, fill_value=None)
+        inside = RegularGridInterpolator((ys, xs), layer, bounds_error=False, fill_value=None)
+        dist = np.clip(depth(fine_hits, inside(fine)), -step, step).reshape(len(fy), len(fx))
         region = outline(fx, fy, dist).simplify(0.05 * w)
-        below = layer
+        below = np.where(layer > below, fits, below)
         if region.area < w * w:
             continue
-        # Ueberhang: Flaeche, die nicht auf der Schicht darunter liegt
-        if support is not None:
-            loose.append(region.difference(support.buffer(0.5 * w)).area / region.area)
-        support = region
-        field = (DirectionField(xs, ys, layer, fem_pts, sigma, refs)
+        field = (DirectionField(xs, ys, fits, fem_pts, sigma, refs)
                  if cfg["infill"] == "explizit" else None)
         ordered = order_paths(layer_paths(region, len(printed), cfg, w, field), pos)
         paths = []
@@ -821,24 +823,16 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
             yx = p[:, ::-1]
             paths.append((np.column_stack([p, surf(yx)]), dz(yx)))
         pos = ordered[-1][-1] if ordered else pos
-        slope = np.degrees(np.arctan(np.hypot(*np.gradient(layer, ys, xs))))
         inside_k = depth(hits, layer.ravel()).reshape(ny, nx) > 0
         if inside_k.any():
             # 5./95. Perzentil je Schicht wie im Original
-            h_n = ((layer - layers[k - 1] if k else layer) * np.cos(np.radians(slope)))[inside_k]
+            h_n = (thick_k / stretch)[inside_k]
             h_rng = [min(h_rng[0], np.percentile(h_n, 5)), max(h_rng[1], np.percentile(h_n, 95))]
         printed.append((paths, surf))
     if not printed:
         raise InputError("Keine Schicht schneidet das Bauteil - ist die Datei leer?")
     progress.say(f"{len(printed)} Schichten, Dicke senkrecht zur Schicht "
                  f"{h_rng[0]:.2f} .. {h_rng[1]:.2f} mm", note=True)
-    if h_rng[0] < 0.95 * h_min or h_rng[1] > 1.05 * h_max:
-        progress.warn(f"Schichtdicke ausserhalb des Fensters {h_min:.2f} .. {h_max:.2f} mm - "
-                      f"Neigung senken.")
-    n_loose = sum(f > 0.05 for f in loose)
-    if n_loose:
-        progress.warn(f"Ueberhang - in {n_loose} Schichten liegen bis zu {max(loose):.0%} der "
-                      f"Flaeche frei in der Luft. Ohne Stuetzen nicht druckbar; andere Baurichtung waehlen.")
 
     progress.step(4)
     nozzle_temp, bed_temp, fan, retract = MATERIALS[cfg["material"]]
