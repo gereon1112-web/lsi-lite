@@ -1,49 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" font-family="system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13">
-<title>Neigungsgrenze am Duesenkegel und am Schlitten</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 280" width="760" font-family="system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600">
+<title>Senkrechte Düse: flache Schicht frei, steile Schicht stößt an</title>
 <style>
-.ink{fill:#24292f} .soft{fill:#57606a}
-.line{stroke:#24292f;stroke-width:1.4;fill:none} .thin{stroke:#8c959f;stroke-width:1;fill:none}
-.dash{stroke:#0969da;stroke-width:1.8;stroke-dasharray:7 5;fill:none} .accent{fill:#0969da}
-.arcb{stroke:#0969da;stroke-width:1.4;fill:none} .arcg{stroke:#24292f;stroke-width:1.2;fill:none}
-.part{fill:#d0d7de;stroke:#8c959f;stroke-width:1} .layer{stroke:#afb8c1;stroke-width:1;fill:none}
-.block{fill:#8c959f} .carriage{fill:#57606a} .cone{fill:#0969da;fill-opacity:.10}
-.dim{stroke:#57606a;stroke-width:1;fill:none}
+.mat{fill:#dde6f0} .lay{stroke:#b9c7d6;stroke-width:1} .top{stroke:#57728f;stroke-width:2.5}
+.sink{fill:#a5aeb8} .block{fill:#d9894b} .brass{fill:#c9a043}
+.flank{stroke:#57606a;stroke-width:1.2;stroke-dasharray:5 4;fill:none}
+.ok,.okc{fill:#1a7f37} .okm{stroke:#fff;stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.bad,.badc{fill:#cf222e} .badr{fill:#cf222e;fill-opacity:.15;stroke:#cf222e;stroke-width:2}
+.cap{fill:#57606a;font-weight:400;font-size:13px} .sep{stroke:#d0d7de}
 @media (prefers-color-scheme: dark) {
- .ink{fill:#e6edf3} .soft{fill:#9198a1}
- .line{stroke:#e6edf3} .thin{stroke:#6e7681} .dash{stroke:#4493f8} .accent{fill:#4493f8}
- .arcb{stroke:#4493f8} .arcg{stroke:#e6edf3}
- .part{fill:#30363d;stroke:#6e7681} .layer{stroke:#484f58}
- .block{fill:#6e7681} .carriage{fill:#9198a1} .cone{fill:#4493f8;fill-opacity:.16} .dim{stroke:#9198a1}
+ .mat{fill:#1f2a37} .lay{stroke:#2f3e50} .top{stroke:#7fa3c9}
+ .sink{fill:#6e7781} .block{fill:#c27a42} .brass{fill:#b8923c} .flank{stroke:#9198a1}
+ .ok,.okc{fill:#3fb950} .okm{stroke:#0d1117} .bad,.badc{fill:#f85149} .badr{fill:#f85149;stroke:#f85149}
+ .cap{fill:#9198a1} .sep{stroke:#30363d}
 }
 </style>
-<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 Z" class="soft"/></marker></defs>
-<!-- Schlitten und Heizblock -->
-<rect class="carriage" x="70" y="54" width="600" height="16" rx="3"/>
-<text class="ink" x="78" y="46">Schlitten, Lüfter</text>
-<rect class="block" x="152" y="147" width="76" height="38" rx="2"/>
-<rect class="block" x="181" y="70" width="18" height="77"/>
-<text class="ink" x="142" y="171" text-anchor="end">Heizblock</text>
-<path class="block" d="M179,185 L201,185 L193,210 L187,210 Z"/>
-<!-- Duesenkegel -->
-<path class="cone" d="M190,210 L228,185 L152,185 Z"/>
-<path class="thin" d="M122,167.6 L190,210 L258,167.6" stroke-dasharray="3 3"/>
-<!-- gedrucktes Bauteil -->
-<path class="part" d="M196,211.1 L610,79.4 L610,262 L196,262 Z"/><path class="layer" d="M196,222.1 L610,90.4"/><path class="layer" d="M196,233.1 L610,101.4"/><path class="layer" d="M196,244.1 L610,112.4"/><path class="layer" d="M196,255.1 L610,123.4"/><path class="layer" d="M196,266.1 L610,134.4"/>
-<text class="soft" x="440.0" y="248" text-anchor="middle">gedruckte Schichten</text>
-<!-- Waagerechte und Grenzlinie -->
-<path class="thin" d="M80,210 L340,210"/>
-<path class="dash" d="M190,210 L630,70"/>
-<circle class="accent" cx="630" cy="70" r="4"/>
-<text class="accent" x="630" y="46" text-anchor="end">hier stößt der Schlitten an</text>
-<path class="arcb" d="M310.0,210.0 A120,120 0 0 0 304.4,173.6"/>
-<text class="accent" x="316" y="202" font-style="italic">ϑ<tspan font-size="10" dy="3">max</tspan></text>
-<path class="arcg" d="M128.0,210.0 A62,62 0 0 1 136.3,178.9"/>
-<text class="ink" x="120" y="198" text-anchor="end" font-style="italic">ϑ<tspan font-size="10" dy="3">D</tspan></text>
-<!-- Masse -->
-<path class="dim" d="M190,280 L630,280" marker-start="url(#ar)" marker-end="url(#ar)"/>
-<path class="thin" d="M630,74 L630,286"/><path class="thin" d="M190,214 L190,286"/>
-<text class="ink" x="410.0" y="295" text-anchor="middle" font-style="italic">ℓ<tspan font-size="10" dy="3">B</tspan><tspan dy="-3" font-style="normal"> größte Ausdehnung des Bauteils</tspan></text>
-<path class="dim" d="M652,210 L652,70" marker-start="url(#ar)" marker-end="url(#ar)"/>
-<path class="thin" d="M614,210 L658,210"/>
-<text class="ink" x="660" y="144.0" font-style="italic">h<tspan font-size="10" dy="3">S</tspan></text>
+<text class="ok" x="30" y="30">Flach: Düse bleibt frei</text><clipPath id="c0"><path d="M30.0,226.0 L350,158.0 L350,250 L30.0,250 Z"/></clipPath><path class="mat" d="M30.0,226.0 L350,158.0 L350,250 L30.0,250 Z"/><g clip-path="url(#c0)"><path class="lay" d="M0,241.4 L350,167.0"/><path class="lay" d="M0,250.4 L350,176.0"/><path class="lay" d="M0,259.4 L350,185.0"/><path class="lay" d="M0,268.4 L350,194.0"/><path class="lay" d="M0,277.4 L350,203.0"/><path class="lay" d="M0,286.4 L350,212.0"/><path class="lay" d="M0,295.4 L350,221.0"/><path class="lay" d="M0,304.4 L350,230.0"/><path class="lay" d="M0,313.4 L350,239.0"/><path class="lay" d="M0,322.4 L350,248.0"/><path class="lay" d="M0,331.4 L350,257.0"/><path class="lay" d="M0,340.4 L350,266.0"/><path class="lay" d="M0,349.4 L350,275.0"/><path class="lay" d="M0,358.4 L350,284.0"/><path class="lay" d="M0,367.4 L350,293.0"/><path class="lay" d="M0,376.4 L350,302.0"/><path class="lay" d="M0,385.4 L350,311.0"/><path class="lay" d="M0,394.4 L350,320.0"/><path class="lay" d="M0,403.4 L350,329.0"/><path class="lay" d="M0,412.4 L350,338.0"/><path class="lay" d="M0,421.4 L350,347.0"/><path class="lay" d="M0,430.4 L350,356.0"/><path class="lay" d="M0,439.4 L350,365.0"/><path class="lay" d="M0,448.4 L350,374.0"/><path class="lay" d="M0,457.4 L350,383.0"/><path class="lay" d="M0,466.4 L350,392.0"/><path class="lay" d="M0,475.4 L350,401.0"/><path class="lay" d="M0,484.4 L350,410.0"/><path class="lay" d="M0,493.4 L350,419.0"/><path class="lay" d="M0,502.4 L350,428.0"/><path class="lay" d="M0,511.4 L350,437.0"/><path class="lay" d="M0,520.4 L350,446.0"/><path class="lay" d="M0,529.4 L350,455.0"/><path class="lay" d="M0,538.4 L350,464.0"/><path class="lay" d="M0,547.4 L350,473.0"/><path class="lay" d="M0,556.4 L350,482.0"/><path class="lay" d="M0,565.4 L350,491.0"/><path class="lay" d="M0,574.4 L350,500.0"/><path class="lay" d="M0,583.4 L350,509.0"/></g><path class="top" d="M30.0,226.0 L350,158.0"/><path class="flank" d="M40,120.6 L190,192 L340,120.6"/><rect class="sink" x="183" y="58" width="14" height="82"/><rect class="sink" x="166" y="58" width="48" height="5" rx="1.5"/><rect class="sink" x="166" y="68" width="48" height="5" rx="1.5"/><rect class="sink" x="166" y="78" width="48" height="5" rx="1.5"/><rect class="sink" x="166" y="88" width="48" height="5" rx="1.5"/><rect class="sink" x="166" y="98" width="48" height="5" rx="1.5"/><rect class="sink" x="166" y="108" width="48" height="5" rx="1.5"/><rect class="sink" x="166" y="118" width="48" height="5" rx="1.5"/><rect class="block" x="148" y="140" width="84" height="32" rx="4"/><path class="brass" d="M178,172 L202,172 L202,178 L194,192 L186,192 L178,178 Z"/><circle class="okc" cx="282" cy="168" r="13"/><path class="okm" d="M276,168 l4,4 l8,-9"/>
+<path class="sep" d="M380,20 L380,250"/>
+<text class="bad" x="410" y="30">Zu steil: Heizblock stößt an</text><path class="flank" d="M420,120.6 L570,192 L720,120.6"/><rect class="sink" x="563" y="58" width="14" height="82"/><rect class="sink" x="546" y="58" width="48" height="5" rx="1.5"/><rect class="sink" x="546" y="68" width="48" height="5" rx="1.5"/><rect class="sink" x="546" y="78" width="48" height="5" rx="1.5"/><rect class="sink" x="546" y="88" width="48" height="5" rx="1.5"/><rect class="sink" x="546" y="98" width="48" height="5" rx="1.5"/><rect class="sink" x="546" y="108" width="48" height="5" rx="1.5"/><rect class="sink" x="546" y="118" width="48" height="5" rx="1.5"/><rect class="block" x="528" y="140" width="84" height="32" rx="4"/><path class="brass" d="M558,172 L582,172 L582,178 L574,192 L566,192 L558,178 Z"/><clipPath id="c380"><path d="M490.2,250.0 L730,75.8 L730,250 L490.2,250 Z"/></clipPath><path class="mat" d="M490.2,250.0 L730,75.8 L730,250 L490.2,250 Z"/><g clip-path="url(#c380)"><path class="lay" d="M380,339.0 L730,84.8"/><path class="lay" d="M380,348.0 L730,93.8"/><path class="lay" d="M380,357.0 L730,102.8"/><path class="lay" d="M380,366.0 L730,111.8"/><path class="lay" d="M380,375.0 L730,120.8"/><path class="lay" d="M380,384.0 L730,129.8"/><path class="lay" d="M380,393.0 L730,138.8"/><path class="lay" d="M380,402.0 L730,147.8"/><path class="lay" d="M380,411.0 L730,156.8"/><path class="lay" d="M380,420.0 L730,165.8"/><path class="lay" d="M380,429.0 L730,174.8"/><path class="lay" d="M380,438.0 L730,183.8"/><path class="lay" d="M380,447.0 L730,192.8"/><path class="lay" d="M380,456.0 L730,201.8"/><path class="lay" d="M380,465.0 L730,210.8"/><path class="lay" d="M380,474.0 L730,219.8"/><path class="lay" d="M380,483.0 L730,228.8"/><path class="lay" d="M380,492.0 L730,237.8"/><path class="lay" d="M380,501.0 L730,246.8"/><path class="lay" d="M380,510.0 L730,255.8"/><path class="lay" d="M380,519.0 L730,264.8"/><path class="lay" d="M380,528.0 L730,273.8"/><path class="lay" d="M380,537.0 L730,282.8"/><path class="lay" d="M380,546.0 L730,291.8"/><path class="lay" d="M380,555.0 L730,300.8"/><path class="lay" d="M380,564.0 L730,309.8"/><path class="lay" d="M380,573.0 L730,318.8"/><path class="lay" d="M380,582.0 L730,327.8"/><path class="lay" d="M380,591.0 L730,336.8"/><path class="lay" d="M380,600.0 L730,345.8"/><path class="lay" d="M380,609.0 L730,354.8"/><path class="lay" d="M380,618.0 L730,363.8"/><path class="lay" d="M380,627.0 L730,372.8"/><path class="lay" d="M380,636.0 L730,381.8"/><path class="lay" d="M380,645.0 L730,390.8"/><path class="lay" d="M380,654.0 L730,399.8"/><path class="lay" d="M380,663.0 L730,408.8"/><path class="lay" d="M380,672.0 L730,417.8"/><path class="lay" d="M380,681.0 L730,426.8"/></g><path class="top" d="M490.2,250.0 L730,75.8"/><circle class="badr" cx="597.5" cy="172" r="17"/><circle class="badc" cx="597.5" cy="172" r="4.5"/>
+<text class="cap" x="30" y="274">gestrichelt: Flanke von Düse und Heizblock</text>
 </svg>

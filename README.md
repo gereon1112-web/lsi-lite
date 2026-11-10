@@ -65,7 +65,7 @@ Die Zellen der Reihe nach mit ▶ starten (oder *Alle ausführen*):
 | Feld | Bedeutung | Vorgabe |
 | --- | --- | --- |
 | duese | Düsendurchmesser in mm; legt Schichthöhe und Bahnbreite fest (siehe unten) | 0.4 |
-| neigung_max | wie steil eine Schicht stehen darf, in Grad; [so ermittelst du den Wert](#maximale-neigung-ermitteln) | 20 |
+| neigung_max | wie steil eine Schicht stehen darf, in Grad; [warum es eine Grenze gibt](#warum-die-neigung-begrenzt-ist) | 20 |
 | fuellung | `konzentrisch` (Ringe parallel zum Rand), `zigzag` (Linien, je Schicht um 90° gedreht) oder `explizit` (Stromlinien entlang der Zugrichtung: beste Ausrichtung, aber Lücken, wo Linien auseinanderlaufen) | konzentrisch |
 | fuelldichte | 100 = massiv, 0 = nur Wände | 100 |
 | waende | Anzahl Wandbahnen | 1 |
@@ -88,47 +88,18 @@ Schichthöhe; so liegt der Strang auch an der dicksten Stelle frei und wird sons
 Weitere feste Werte (Geschwindigkeiten, Rückzug, Start-G-Code, Stufen der Mittelschicht)
 stehen oben in `lsi_lite.py`.
 
-### Maximale Neigung ermitteln
+### Warum die Neigung begrenzt ist
 
-Ein 3-Achs-Drucker hält die Düse immer senkrecht. Steht eine Schicht schräg, darf die
-Düse beim Drucken nirgends an Material stoßen, das schon liegt. Zwei Teile des Druckers
-setzen dafür eine Grenze: der **Düsenkegel** (Düse und Heizblock) und darüber der
-**Schlitten** mit dem Lüfter.
+Ein 3-Achs-Drucker hält die Düse immer senkrecht. Ihre Spitze ragt nur wenige Millimeter
+unter dem Heizblock hervor. Steigt eine Schicht flach an, bleibt neben der Spitze genug
+Platz. Steigt sie steiler an als die Flanke von Düse und Heizblock, fährt der Heizblock
+in das, was schon gedruckt ist.
 
-<p align="center"><img src="bilder/neigungsgrenze.svg" alt="Neigungsgrenze am Düsenkegel und am Schlitten" width="720"></p>
+<p align="center"><img src="bilder/neigungsgrenze.svg" alt="Links eine flache Schicht, die Düse bleibt frei; rechts eine steile Schicht, der Heizblock stößt an" width="720"></p>
 
-Die erlaubte Neigung ist der kleinere von zwei Winkeln
-(Etienne u. a. 2019, CurviSlicer; Anhang der Diplomarbeit):
-
-    Neigung max = kleinerer Wert von  ϑ_D  und  arctan(h_S / ℓ_B)
-
-- **ϑ_D, Winkel des Düsenkegels:** Von der Düsenspitze zur unteren Ecke des Heizblocks
-  (oder der Silikonsocke) gezogen, steigt eine Linie um diesen Winkel gegen die Waagerechte.
-  Messen: wie weit die Unterkante des Heizblocks über der Düsenspitze liegt (a) und wie
-  weit die Ecke waagerecht von der Düsenmitte entfernt ist (b). Dann ist
-  ϑ_D = arctan(a / b).
-- **h_S, Höhe des Schlittens:** Abstand von der Düsenspitze zum tiefsten Punkt von
-  Schlitten, Lüfterkanal oder Kabelführung.
-- **ℓ_B, Größe des Bauteils:** seine größte Ausdehnung auf dem Bett. Eine Schicht, die
-  über die ganze Länge gleichmäßig ansteigt, liegt am anderen Ende um
-  ℓ_B · tan(Neigung) höher; das darf nicht mehr als h_S sein.
-
-Kleine Bauteile begrenzt der Düsenkegel, große der Schlitten.
-
-**Beispiel** (angenommene Werte, nicht an einem bestimmten Drucker gemessen): Die Düse
-ragt a = 5 mm unter dem Heizblock hervor, die Ecke liegt b = 12 mm neben der
-Düsenmitte, der Lüfterkanal hängt h_S = 20 mm über der Spitze.
-
-| Bauteil | Kegel ϑ_D | Schlitten arctan(h_S / ℓ_B) | Neigung max |
-| --- | --- | --- | --- |
-| 30 mm groß | arctan(5/12) = 22.6° | arctan(20/30) = 33.7° | **22.6°** (Kegel) |
-| Biegebalken, 110 mm | 22.6° | arctan(20/110) = 10.3° | **10.3°** (Schlitten) |
-
-Die Schlittengrenze ist vorsichtig gerechnet: Sie nimmt eine Schicht an, die über das
-ganze Bauteil gleichmäßig ansteigt. Die Schichten von LSI Lite wellen sich auf und ab
-und steigen deshalb meist weniger hoch, als die Formel annimmt. Entscheidend ist,
-dass der Höhenunterschied innerhalb einer Schicht unter h_S bleibt. Wer sicher gehen
-will, nimmt trotzdem den Wert der Formel.
+`neigung_max` muss deshalb flacher sein als diese Flanke am eigenen Druckkopf. Bei großen
+Bauteilen lieber noch etwas kleiner wählen, weil weiter oben der Schlitten mit dem Lüfter
+sitzt. Üblich sind 15 bis 25°.
 
 **Die Eingabedatei:** ein Tetraedernetz (C3D4 oder C3D10) mit Spannungstensor je Knoten,
 z. B. der VTU-Export eines CalculiX-Ergebnisses aus FreeCAD (Felder
