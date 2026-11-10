@@ -30,6 +30,12 @@ Einstellungen oben in `lsi_lite.py` unter `SETTINGS`.
 
 Python 3.12 oder neuer. Unter Windows nicht getestet.
 
+**Drucker:** Der G-Code läuft auf Marlin und Klipper. Bambu-Drucker: die `.gcode`-Datei
+mit [Bambu Connect](https://wiki.bambulab.com/en/software/bambu-connect) senden. Der
+Startblock ist allgemein gehalten: Er heizt, fährt die Referenzfahrt und legt eine
+Reinigungslinie am linken Bettrand, misst das Bett aber nicht ein. Auf die erste Lage
+achten. Auf einem Bambu bisher nicht getestet.
+
 ## Ablauf im Notebook
 
 | Zelle | was passiert |
