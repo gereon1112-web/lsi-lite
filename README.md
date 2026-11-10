@@ -40,11 +40,9 @@ Die Zellen der Reihe nach mit ▶ starten (oder *Alle ausführen*):
    läuft (bei der Mittelschicht die Stufe, beim Bahnenlegen die Schicht) und wie lange
    jeder erledigte Schritt gedauert hat; darunter steht das Protokoll. Je nach Bauteil
    dauert das 5 Sekunden bis 2 Minuten.
-4. **Ansehen.** Oben ein Schnitt durch alle Schichten (rot die lastoptimierte
-   Mittelschicht, blau die Zugrichtung) und wie weit die Mittelschicht nach oben oder
-   unten ausweicht. Darunter alle Bahnen in 3D, mit der Maus drehbar, Farbe = Schicht;
-   schwarze Striche = Zugrichtung, länger heißt mehr Zug, ein Klick auf die Legende
-   blendet sie aus.
+4. **Ansehen.** Alle Bahnen in 3D, mit der Maus drehbar, Farbe = Schicht; schwarze
+   Striche = Zugrichtung, länger heißt mehr Zug, ein Klick auf die Legende blendet sie
+   aus.
 5. **Herunterladen.** In Colab lädt die Zelle den G-Code (`<name>_lite.gcode`) herunter;
    lokal nennt sie den Pfad (neben der `.vtu`, bei den Beispielen in `beispiele/`).
 
@@ -193,8 +191,8 @@ Neuen Stand holen: `git pull` im Ordner.
 | oder mit Pfad | `.venv/bin/python lsi_lite.py teil.vtu` | `.venv\Scripts\python lsi_lite.py teil.vtu` |
 | Beispiel | `.venv/bin/python lsi_lite.py beispiele/tragwerk.vtu` | `.venv\Scripts\python lsi_lite.py beispiele\tragwerk.vtu` |
 
-Die Einstellungen stehen dann oben in `lsi_lite.py` unter `SETTINGS`. G-Code und
-Vorschaubild landen neben der `.vtu`.
+Die Einstellungen stehen dann oben in `lsi_lite.py` unter `SETTINGS`. Der G-Code
+landet neben der `.vtu`.
 
 Unter Windows ist das alles bisher nicht getestet.
 

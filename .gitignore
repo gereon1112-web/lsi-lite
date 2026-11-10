@@ -5,4 +5,3 @@ test/
 eingabe/*
 !eingabe/.gitkeep
 *.gcode
-*_lite.png

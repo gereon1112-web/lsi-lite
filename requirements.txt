@@ -3,7 +3,6 @@ scipy==1.18.1
 vtk==9.7.2
 shapely==2.2.0
 contourpy==1.4.0
-matplotlib==3.11.2
 plotly==7.1.0
 ipykernel==7.4.0
 nbformat==5.11.1

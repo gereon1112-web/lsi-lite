@@ -628,7 +628,7 @@ class GcodeWriter:
 # --- FORTSCHRITT ---
 
 STEPS = ("Bauteil lesen", "Mittelschicht in die Zugrichtung legen", "Schichten aus dem Laplace-Feld",
-         "Schichten abschneiden, Bahnen legen", "G-Code schreiben", "Vorschau zeichnen")
+         "Schichten abschneiden, Bahnen legen", "G-Code schreiben")
 
 PROGRESS_CSS = """<style>
 .lsi{font-family:system-ui,sans-serif;max-width:600px;padding:12px 16px;border:1px solid #8884;border-radius:12px}
@@ -695,7 +695,7 @@ def check_settings(cfg):
 
 
 def slice_vtu(vtu, out_dir=None, show=None, **settings):
-    """Rechnet den G-Code; Rueckgabe (G-Code, Vorschaubild, Bahnen je Schicht, Zugstriche).
+    """Rechnet den G-Code; Rueckgabe (G-Code, Bahnen je Schicht, Zugstriche).
 
     show: Funktion, die die Schrittliste als HTML entgegennimmt (Notebook), sonst None.
     """
@@ -847,12 +847,9 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     print(f"   {gcode.name}: {len(gc.lines)} Zeilen, Filament {meters:.1f} m "
           f"(etwa {meters * 2.98:.0f} g PLA), Druckzeit etwa {gc.seconds / 60:.0f} min "
           f"(ohne Beschleunigung, real laenger)")
-    progress.step(5)
-    png = out_dir / f"{vtu.stem}_lite.png"
-    strokes = tension_strokes(fem_pts, sigma, 2 * cell)
-    preview(xs, ys, layers, mid, hits, strokes, cell, png)
     progress.step(len(STEPS))
-    return gcode, png, [[P for P, _ in paths] for paths, _ in printed], strokes
+    strokes = tension_strokes(fem_pts, sigma, 2 * cell)
+    return gcode, [[P for P, _ in paths] for paths, _ in printed], strokes
 
 
 def tension_strokes(points, sigma, length):
@@ -900,39 +897,6 @@ def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
     return fig
 
 
-def preview(xs, ys, layers, mid, hits, strokes, cell, png):
-    """Vorschaubild: Schnitt durch Schichten und Zugrichtung, Auslenkung der Mittelschicht."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.collections import LineCollection
-    j = len(ys) // 2
-    row = (hits[0] // len(xs) == j)
-    row_hits = (hits[0][row] % len(xs), hits[1][row])
-    fig, (left, right) = plt.subplots(1, 2, figsize=(13, 4.2),
-                                      gridspec_kw={"width_ratios": [1.6, 1]})
-    for layer in layers:
-        z = layer[j]
-        left.plot(xs, np.where(depth(row_hits, z) > 0, z, np.nan), color="0.45", lw=0.4)
-    left.plot(xs, np.where(depth(row_hits, mid[j]) > 0, mid[j], np.nan), color="C3", lw=2,
-              label="Mittelschicht")
-    near = strokes[np.abs(strokes[:, :, 1].mean(axis=1) - ys[j]) < 0.5 * cell]
-    near = near[::max(1, -(-len(near) // 200))]
-    centre = near.mean(axis=1, keepdims=True)
-    left.add_collection(LineCollection((centre + 0.5 * (near - centre))[:, :, [0, 2]],
-                                       colors="C0", linewidths=1.0, label="Zugrichtung (sigma_1)"))
-    left.set(title=f"Schnitt bei y = {ys[j]:.1f} mm (alle {len(layers)} Schichten)",
-             xlabel="x in mm", ylabel="z in mm", aspect="equal")
-    left.legend(loc="upper center", bbox_to_anchor=(0.5, -0.42), ncol=2, frameon=False)
-    im = right.imshow(mid - mid.mean(), origin="lower", cmap="coolwarm",
-                      extent=(xs[0], xs[-1], ys[0], ys[-1]))
-    right.set(title="Auslenkung der Mittelschicht", xlabel="x in mm", ylabel="y in mm")
-    fig.colorbar(im, ax=right, label="mm", location="bottom", shrink=0.8)
-    fig.tight_layout()
-    fig.savefig(png, dpi=130)
-    plt.close(fig)
-
-
 def default_input():
     """Die .vtu-Datei im Ordner eingabe/ neben diesem Programm (bei mehreren die neueste)."""
     found = sorted((HERE / "eingabe").glob("*.vtu"), key=lambda p: p.stat().st_mtime)
@@ -952,10 +916,10 @@ def main():
     parser.add_argument("vtu", nargs="?", help="FEM-Ergebnis (Vorgabe: die Datei in eingabe/)")
     args = parser.parse_args()
     try:
-        gcode, png, _, _ = slice_vtu(Path(args.vtu) if args.vtu else default_input())
+        gcode, _, _ = slice_vtu(Path(args.vtu) if args.vtu else default_input())
     except InputError as err:
         sys.exit(f"Abbruch: {err}")
-    print(f"Fertig: {gcode}\n        {png}")
+    print(f"Fertig: {gcode}")
 
 
 if __name__ == "__main__":
