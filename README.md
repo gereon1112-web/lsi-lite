@@ -140,6 +140,18 @@ Eigene `.vtu`-Dateien kommen lokal in den Ordner `eingabe/` (bei mehreren gilt d
 neueste). Der G-Code liegt neben der `.vtu` (bei den Beispielen in `beispiele/`).
 Neuen Stand holen: `git pull` im Ordner.
 
+**Aufräumen.** Die Umgebung `.venv` bleibt im Ordner, auch wenn Notebook und VS Code
+geschlossen sind (etwa 1 GB). Wer sie nicht mehr braucht: erst VS Code schließen, damit
+kein Kernel mehr läuft, dann den Ordner `.venv` löschen, im Dateimanager oder so:
+
+| | Linux | Windows |
+| --- | --- | --- |
+| Umgebung löschen | `rm -rf .venv` | `rmdir /s /q .venv` |
+
+Aus dem Notebook heraus geht das nicht: Der Kernel läuft mit dem Python aus `.venv`, und
+unter Windows sind dessen Dateien gesperrt, solange er läuft. Beim nächsten Öffnen legt
+man die Umgebung wie in Schritt 4 neu an.
+
 ### Umgebung von Hand (für JupyterLab und die Kommandozeile)
 
 | Schritt | Linux | Windows |
