@@ -631,97 +631,54 @@ STEPS = ("Bauteil lesen", "Mittelschicht in die Zugrichtung legen", "Schichten a
          "Schichten abschneiden, Bahnen legen", "G-Code schreiben", "Vorschau zeichnen")
 
 PROGRESS_CSS = """<style>
-.lsi-steps{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:620px;padding:14px 18px;
-  border:1px solid rgba(128,128,128,.28);border-radius:12px;line-height:1.35}
-.lsi-steps .head{display:flex;justify-content:space-between;gap:12px;font-weight:600;margin-bottom:8px}
-.lsi-steps .head span{font-weight:400;opacity:.7;font-variant-numeric:tabular-nums}
-.lsi-steps .row{display:flex;align-items:flex-start;gap:12px;padding:5px 0}
-.lsi-steps .dot{flex:0 0 26px;height:26px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:12px;font-weight:700;border:2px solid rgba(128,128,128,.4);
-  color:rgba(128,128,128,.85);box-sizing:border-box}
-.lsi-steps .done .dot{background:#2e9d5b;border-color:#2e9d5b;color:#fff}
-.lsi-steps .run .dot{border-color:#3b82f6;color:#3b82f6;animation:lsi-pulse 1.4s ease-in-out infinite}
-.lsi-steps .fail .dot{background:#d64545;border-color:#d64545;color:#fff}
-@keyframes lsi-pulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.45)}50%{box-shadow:0 0 0 7px rgba(59,130,246,0)}}
-.lsi-steps .text{flex:1;min-width:0;padding-top:3px}
-.lsi-steps .wait .text{opacity:.5}
-.lsi-steps .run .name{font-weight:600}
-.lsi-steps .time{font-size:12px;opacity:.65;padding-top:5px;font-variant-numeric:tabular-nums}
-.lsi-steps .detail{font-size:12px;opacity:.75;margin-top:2px}
-.lsi-steps .bar{height:4px;border-radius:2px;background:rgba(128,128,128,.2);margin-top:5px;overflow:hidden}
-.lsi-steps .bar div{height:100%;background:#3b82f6;border-radius:2px}
+.lsi{font-family:system-ui,sans-serif;max-width:600px;padding:12px 16px;border:1px solid #8884;border-radius:12px}
+.lsi .r{display:flex;gap:12px;padding:4px 0} .lsi small{opacity:.65} .lsi .wait{opacity:.5}
+.lsi .d{flex:0 0 22px;height:22px;line-height:22px;border-radius:50%;border:2px solid #8886;text-align:center;font-size:12px}
+.lsi .ok .d{background:#2e9d5b;border-color:#2e9d5b;color:#fff}
+.lsi .run .d{border-color:#3b82f6;color:#3b82f6;animation:lsi 1.4s infinite}
+.lsi i{display:block;height:4px;margin-top:4px;border-radius:2px;background:#3b82f6}
+@keyframes lsi{0%{box-shadow:0 0 0 0 #3b82f680}70%{box-shadow:0 0 0 7px #3b82f600}}
 </style>"""
 
 
 class Progress:
-    """Rechenablauf als Schrittliste (HTML an show) und als Textzeilen im Protokoll."""
+    """Rechenablauf: Schrittname ins Protokoll, im Notebook die Schrittliste als HTML an show."""
 
     def __init__(self, title, show=None):
-        self.title, self.show = title, show
-        self.current, self.detail, self.share, self.state = -1, "", None, "run"
-        self.times, self.t0 = [], time.perf_counter()
-        self.step_t0 = self.last_draw = self.t0
-        self.draw()
+        self.title, self.show, self.current, self.starts = title, show, -1, []
 
     def step(self, k, detail="", share=None):
         """Schritt k (ab 0) laeuft; detail und share (0..1) sagen, wie weit er ist."""
-        now = time.perf_counter()
         if k != self.current:
-            if self.current >= 0:
-                self.times.append(now - self.step_t0)
-            self.current, self.step_t0 = k, now
-            print(f"{k + 1}  {STEPS[k]}")
-        self.detail, self.share = detail, share
-        # Neu zeichnen nur alle 0,2 s, sonst bremst die Anzeige die Rechnung
-        if now - self.last_draw > 0.2 or not detail:
-            self.draw()
+            self.current = k
+            self.starts.append(time.perf_counter())
+            if k < len(STEPS):
+                print(f"{k + 1}  {STEPS[k]}")
+        if self.show:
+            self.show(self.html(detail, share))
 
-    def finish(self):
-        """Alle Schritte erledigt."""
-        self.times.append(time.perf_counter() - self.step_t0)
-        self.current, self.state = len(STEPS), "done"
-        self.draw()
-
-    def fail(self):
-        """Der laufende Schritt ist abgebrochen."""
-        self.state = "fail"
-        self.draw()
-
-    def draw(self):
-        """Gibt die Schrittliste an show weiter (falls gesetzt)."""
-        self.last_draw = time.perf_counter()
-        if self.show is not None:
-            self.show(self.html())
-
-    def html(self):
-        """Die Schrittliste als HTML: erledigt (Haken, Dauer), laufend (Balken), wartend."""
-        total = time.perf_counter() - self.t0
-        status = {"run": f"{total:.0f} s", "done": f"fertig in {total:.0f} s",
-                  "fail": "abgebrochen"}[self.state]
+    def html(self, detail, share):
+        """Schrittliste: erledigt mit Haken und Dauer, laufend mit Balken, wartend blass."""
         rows = []
         for k, name in enumerate(STEPS):
-            detail, info = "", ""
             if k < self.current:
-                css, badge, info = "done", "&#10003;", f"{self.times[k]:.1f} s"
+                took = self.starts[k + 1] - self.starts[k]
+                rows.append(f'<div class="r ok"><b class="d">&#10003;</b>{name} <small>{took:.1f} s</small></div>')
             elif k == self.current:
-                css, badge = ("fail", "!") if self.state == "fail" else ("run", str(k + 1))
-                if self.detail:
-                    detail = f'<div class="detail">{escape(self.detail)}</div>'
-                if self.share is not None and self.state == "run":
-                    detail += f'<div class="bar"><div style="width:{100 * self.share:.0f}%"></div></div>'
+                bar = f'<i style="width:{100 * share:.0f}%"></i>' if share is not None else ""
+                rows.append(f'<div class="r run"><b class="d">{k + 1}</b>'
+                            f'<div style="flex:1"><b>{name}</b> <small>{detail}</small>{bar}</div></div>')
             else:
-                css, badge = "wait", str(k + 1)
-            rows.append(f'<div class="row {css}"><div class="dot">{badge}</div>'
-                        f'<div class="text"><div class="name">{name}</div>{detail}</div>'
-                        f'<div class="time">{info}</div></div>')
-        return (PROGRESS_CSS + f'<div class="lsi-steps"><div class="head">LSI Lite &middot; '
-                f'{escape(self.title)}<span>{status}</span></div>{"".join(rows)}</div>')
+                rows.append(f'<div class="r wait"><b class="d">{k + 1}</b>{name}</div>')
+        total = time.perf_counter() - self.starts[0]
+        return (f'{PROGRESS_CSS}<div class="lsi"><b>LSI Lite &middot; {escape(self.title)}</b> '
+                f'<small>{total:.0f} s</small>{"".join(rows)}</div>')
 
 
 # --- GESAMTABLAUF ---
 
 def check_settings(cfg):
-    """Prueft die Einstellungen; Rueckgabe: Bahnbreite und Schichthoehe in der Mitte des Fensters."""
+    """Prueft die Einstellungen; Rueckgabe: Schichthoehe min, max, Mitte und Bahnbreite."""
     if cfg["printer"] not in PRINTERS or cfg["material"] not in MATERIALS:
         raise InputError(f"Drucker oder Material unbekannt. Drucker: {list(PRINTERS)}, "
                          f"Material: {list(MATERIALS)}.")
@@ -733,33 +690,19 @@ def check_settings(cfg):
         raise InputError("Duesendurchmesser 0.1 .. 2.0 mm.")
     if not 0 < cfg["max_tilt"] <= 45 or not 0 <= cfg["density"] <= 100 or cfg["walls"] < 0:
         raise InputError("Neigung 0..45 Grad, Fuelldichte 0..100 %, Waende >= 0.")
-    return layer_window(cfg["nozzle"])
-
-
-def layer_window(nozzle):
-    """Schichthoehe min, max, Mitte und Bahnbreite (Duese + groesste Hoehe) zu einer Duese."""
-    h_min, h_max = LAYER_RATIO[0] * nozzle, LAYER_RATIO[1] * nozzle
-    return h_min, h_max, 0.5 * (h_min + h_max), nozzle + h_max
+    h_min, h_max = LAYER_RATIO[0] * cfg["nozzle"], LAYER_RATIO[1] * cfg["nozzle"]
+    return h_min, h_max, 0.5 * (h_min + h_max), cfg["nozzle"] + h_max
 
 
 def slice_vtu(vtu, out_dir=None, show=None, **settings):
     """Rechnet den G-Code; Rueckgabe (G-Code, Vorschaubild, Bahnen je Schicht, Zugstriche).
 
-    show: Funktion, die die Fortschrittsanzeige als HTML entgegennimmt (Notebook), sonst None.
+    show: Funktion, die die Schrittliste als HTML entgegennimmt (Notebook), sonst None.
     """
-    progress = Progress(Path(vtu).name, show)
-    try:
-        result = run_steps(Path(vtu), out_dir, progress, {**SETTINGS, **settings})
-    except Exception:
-        progress.fail()
-        raise
-    progress.finish()
-    return result
-
-
-def run_steps(vtu, out_dir, progress, cfg):
-    """Die sechs Schritte von slice_vtu, mit Meldung an die Fortschrittsanzeige."""
+    cfg = {**SETTINGS, **settings}
     h_min, h_max, h_nom, w = check_settings(cfg)
+    vtu = Path(vtu)
+    progress = Progress(vtu.name, show)
     out_dir = Path(out_dir) if out_dir else vtu.parent
     bed = PRINTERS[cfg["printer"]]
     if cfg["build_dir"] == "auto":
@@ -908,6 +851,7 @@ def run_steps(vtu, out_dir, progress, cfg):
     png = out_dir / f"{vtu.stem}_lite.png"
     strokes = tension_strokes(fem_pts, sigma, 2 * cell)
     preview(xs, ys, layers, mid, hits, strokes, cell, png)
+    progress.step(len(STEPS))
     return gcode, png, [[P for P, _ in paths] for paths, _ in printed], strokes
 
 
