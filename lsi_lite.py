@@ -9,6 +9,8 @@ import argparse
 import itertools
 import math
 import sys
+import time
+from html import escape
 from pathlib import Path
 
 import numpy as np
@@ -23,9 +25,7 @@ HERE = Path(__file__).resolve().parent
 
 # Was der Nutzer waehlt (im Notebook das Formular).
 SETTINGS = {
-    "nozzle": 0.4,          # Duesendurchmesser in mm
-    "layer_min": 0.1,       # duennste Schicht in mm
-    "layer_max": 0.35,      # dickste Schicht in mm
+    "nozzle": 0.4,          # Duesendurchmesser in mm, legt Schichthoehe und Bahnbreite fest
     "max_tilt": 20.0,       # groesste Neigung der Schichten in Grad
     "infill": "konzentrisch",   # "konzentrisch", "zigzag" oder "explizit" (Stromlinien)
     "density": 100,         # Fuelldichte in Prozent, 0 = nur Waende
@@ -84,7 +84,10 @@ MATERIALS = {
 
 # Feste Werte, wie in config.py des Originals.
 GRID_DIVISIONS = 60         # Rasterweite = groesste Ausdehnung / 60
+LAYER_RATIO = (0.25, 0.75)  # Schichthoehe min, max als Vielfaches der Duese (Faustregel)
 FREEDOM = 1e-2              # Restglaettung der Mittelschicht
+MID_STAGES = 5              # Stufen: Zugrichtung an der verformten Mittelschicht neu abtasten
+MID_DAMPING = 0.5           # Anteil, zu dem jede Stufe den neuen Versatz uebernimmt
 OUTER_ITERS = 80            # Runden fuer Neigungs- und Amplitudengrenze
 TILT_GROWTH = 3.0
 IDW_K, IDW_POWER = 8, 2.0   # Abtastung des FEM-Ergebnisses
@@ -270,6 +273,14 @@ def sample_tension(query, fem_points, sigma, refs):
     weight = (np.clip(vals[:, -1] / ref_t, 0, 1) if ref_t > 0 else 0 * vals[:, -1]) \
         * (np.clip((vals[:, -1] - vals[:, -2]) / ref_a, 0, 1) if ref_a > 0 else 1.0)
     return vecs[:, :, -1], weight
+
+
+def tension_on_surface(xy, tris, z, fem_points, sigma, refs, hits, cell):
+    """Zugrichtung und Gewicht je Dreieck der Flaeche mit Knotenhoehen z; ausserhalb des Bauteils Gewicht 0."""
+    cent = np.column_stack([xy[tris].mean(axis=1), z[tris].mean(axis=1)])
+    e1, weight = sample_tension(cent, fem_points, sigma, refs)
+    inside = np.clip(depth(hits, z) / cell, 0, 1)
+    return e1, weight * inside[tris].mean(axis=1)
 
 
 def solve_bounded(S, rhs, s_lo, s_hi, rounds=12):
@@ -614,6 +625,99 @@ class GcodeWriter:
         self.pos = P[-1]
 
 
+# --- FORTSCHRITT ---
+
+STEPS = ("Bauteil lesen", "Mittelschicht in die Zugrichtung legen", "Schichten aus dem Laplace-Feld",
+         "Schichten abschneiden, Bahnen legen", "G-Code schreiben", "Vorschau zeichnen")
+
+PROGRESS_CSS = """<style>
+.lsi-steps{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:620px;padding:14px 18px;
+  border:1px solid rgba(128,128,128,.28);border-radius:12px;line-height:1.35}
+.lsi-steps .head{display:flex;justify-content:space-between;gap:12px;font-weight:600;margin-bottom:8px}
+.lsi-steps .head span{font-weight:400;opacity:.7;font-variant-numeric:tabular-nums}
+.lsi-steps .row{display:flex;align-items:flex-start;gap:12px;padding:5px 0}
+.lsi-steps .dot{flex:0 0 26px;height:26px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:700;border:2px solid rgba(128,128,128,.4);
+  color:rgba(128,128,128,.85);box-sizing:border-box}
+.lsi-steps .done .dot{background:#2e9d5b;border-color:#2e9d5b;color:#fff}
+.lsi-steps .run .dot{border-color:#3b82f6;color:#3b82f6;animation:lsi-pulse 1.4s ease-in-out infinite}
+.lsi-steps .fail .dot{background:#d64545;border-color:#d64545;color:#fff}
+@keyframes lsi-pulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.45)}50%{box-shadow:0 0 0 7px rgba(59,130,246,0)}}
+.lsi-steps .text{flex:1;min-width:0;padding-top:3px}
+.lsi-steps .wait .text{opacity:.5}
+.lsi-steps .run .name{font-weight:600}
+.lsi-steps .time{font-size:12px;opacity:.65;padding-top:5px;font-variant-numeric:tabular-nums}
+.lsi-steps .detail{font-size:12px;opacity:.75;margin-top:2px}
+.lsi-steps .bar{height:4px;border-radius:2px;background:rgba(128,128,128,.2);margin-top:5px;overflow:hidden}
+.lsi-steps .bar div{height:100%;background:#3b82f6;border-radius:2px}
+</style>"""
+
+
+class Progress:
+    """Rechenablauf als Schrittliste (HTML an show) und als Textzeilen im Protokoll."""
+
+    def __init__(self, title, show=None):
+        self.title, self.show = title, show
+        self.current, self.detail, self.share, self.state = -1, "", None, "run"
+        self.times, self.t0 = [], time.perf_counter()
+        self.step_t0 = self.last_draw = self.t0
+        self.draw()
+
+    def step(self, k, detail="", share=None):
+        """Schritt k (ab 0) laeuft; detail und share (0..1) sagen, wie weit er ist."""
+        now = time.perf_counter()
+        if k != self.current:
+            if self.current >= 0:
+                self.times.append(now - self.step_t0)
+            self.current, self.step_t0 = k, now
+            print(f"{k + 1}  {STEPS[k]}")
+        self.detail, self.share = detail, share
+        # Neu zeichnen nur alle 0,2 s, sonst bremst die Anzeige die Rechnung
+        if now - self.last_draw > 0.2 or not detail:
+            self.draw()
+
+    def finish(self):
+        """Alle Schritte erledigt."""
+        self.times.append(time.perf_counter() - self.step_t0)
+        self.current, self.state = len(STEPS), "done"
+        self.draw()
+
+    def fail(self):
+        """Der laufende Schritt ist abgebrochen."""
+        self.state = "fail"
+        self.draw()
+
+    def draw(self):
+        """Gibt die Schrittliste an show weiter (falls gesetzt)."""
+        self.last_draw = time.perf_counter()
+        if self.show is not None:
+            self.show(self.html())
+
+    def html(self):
+        """Die Schrittliste als HTML: erledigt (Haken, Dauer), laufend (Balken), wartend."""
+        total = time.perf_counter() - self.t0
+        status = {"run": f"{total:.0f} s", "done": f"fertig in {total:.0f} s",
+                  "fail": "abgebrochen"}[self.state]
+        rows = []
+        for k, name in enumerate(STEPS):
+            detail, info = "", ""
+            if k < self.current:
+                css, badge, info = "done", "&#10003;", f"{self.times[k]:.1f} s"
+            elif k == self.current:
+                css, badge = ("fail", "!") if self.state == "fail" else ("run", str(k + 1))
+                if self.detail:
+                    detail = f'<div class="detail">{escape(self.detail)}</div>'
+                if self.share is not None and self.state == "run":
+                    detail += f'<div class="bar"><div style="width:{100 * self.share:.0f}%"></div></div>'
+            else:
+                css, badge = "wait", str(k + 1)
+            rows.append(f'<div class="row {css}"><div class="dot">{badge}</div>'
+                        f'<div class="text"><div class="name">{name}</div>{detail}</div>'
+                        f'<div class="time">{info}</div></div>')
+        return (PROGRESS_CSS + f'<div class="lsi-steps"><div class="head">LSI Lite &middot; '
+                f'{escape(self.title)}<span>{status}</span></div>{"".join(rows)}</div>')
+
+
 # --- GESAMTABLAUF ---
 
 def check_settings(cfg):
@@ -625,31 +729,46 @@ def check_settings(cfg):
         raise InputError(f"Baurichtung {cfg['build_dir']!r} - erlaubt: {', '.join(AXES)}.")
     if cfg["infill"] not in ("konzentrisch", "zigzag", "explizit"):
         raise InputError("Fuellung muss 'konzentrisch', 'zigzag' oder 'explizit' sein.")
-    if not 0 < cfg["layer_min"] < cfg["layer_max"] <= cfg["nozzle"]:
-        raise InputError("Schichthoehe: es muss gelten 0 < min < max <= Duesendurchmesser.")
+    if not 0.1 <= cfg["nozzle"] <= 2.0:
+        raise InputError("Duesendurchmesser 0.1 .. 2.0 mm.")
     if not 0 < cfg["max_tilt"] <= 45 or not 0 <= cfg["density"] <= 100 or cfg["walls"] < 0:
         raise InputError("Neigung 0..45 Grad, Fuelldichte 0..100 %, Waende >= 0.")
-    h_nom = 0.5 * (cfg["layer_min"] + cfg["layer_max"])
-    thinned = h_nom * math.cos(math.radians(cfg["max_tilt"]))
-    if thinned <= cfg["layer_min"]:
-        raise InputError(f"Bei {cfg['max_tilt']:.0f} Grad Neigung ist die Schicht nur "
-                         f"{thinned:.3f} mm dick (Fenster ab {cfg['layer_min']:.3f} mm). "
-                         f"Neigung senken oder kleinste Schichthoehe verringern.")
-    return cfg["nozzle"] + cfg["layer_max"], h_nom
+    return layer_window(cfg["nozzle"])
 
 
-def slice_vtu(vtu, out_dir=None, **settings):
-    """Rechnet den G-Code; Rueckgabe (G-Code, Vorschaubild, Bahnen je Schicht, Zugstriche)."""
-    cfg = {**SETTINGS, **settings}
-    w, h_nom = check_settings(cfg)
-    vtu = Path(vtu)
+def layer_window(nozzle):
+    """Schichthoehe min, max, Mitte und Bahnbreite (Duese + groesste Hoehe) zu einer Duese."""
+    h_min, h_max = LAYER_RATIO[0] * nozzle, LAYER_RATIO[1] * nozzle
+    return h_min, h_max, 0.5 * (h_min + h_max), nozzle + h_max
+
+
+def slice_vtu(vtu, out_dir=None, show=None, **settings):
+    """Rechnet den G-Code; Rueckgabe (G-Code, Vorschaubild, Bahnen je Schicht, Zugstriche).
+
+    show: Funktion, die die Fortschrittsanzeige als HTML entgegennimmt (Notebook), sonst None.
+    """
+    progress = Progress(Path(vtu).name, show)
+    try:
+        result = run_steps(Path(vtu), out_dir, progress, {**SETTINGS, **settings})
+    except Exception:
+        progress.fail()
+        raise
+    progress.finish()
+    return result
+
+
+def run_steps(vtu, out_dir, progress, cfg):
+    """Die sechs Schritte von slice_vtu, mit Meldung an die Fortschrittsanzeige."""
+    h_min, h_max, h_nom, w = check_settings(cfg)
     out_dir = Path(out_dir) if out_dir else vtu.parent
     bed = PRINTERS[cfg["printer"]]
     if cfg["build_dir"] == "auto":
         cfg["build_dir"] = next((d for f, d in EXAMPLES.values() if Path(f).name == vtu.name), "+z")
         print(f"Baurichtung {cfg['build_dir']} (automatisch)")
 
-    print("1  Bauteil lesen")
+    print(f"Schichthoehe {h_min:.2f} .. {h_max:.2f} mm, Bahnbreite {w:.2f} mm "
+          f"(aus der Duese {cfg['nozzle']} mm)")
+    progress.step(0)
     fem_pts, sigma, tets = read_vtu(vtu)
     fem_pts, sigma = place_on_bed(fem_pts, sigma, cfg["build_dir"], bed)
     hull = fem_pts[hull_triangles(tets)]
@@ -662,7 +781,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
     print(f"   {len(fem_pts)} FEM-Knoten, Bauteil {hi[0] - lo[0]:.1f} x {hi[1] - lo[1]:.1f}"
           f" x {height:.1f} mm, Raster {nx} x {ny} ({cell:.2f} mm)")
 
-    print("2  Mittelschicht in die Zugrichtung legen")
+    progress.step(1)
     # Quader wie im Original: doppelte Bauteilhoehe, Mittelschicht mittig, Bett unten
     z_mid, z_top = 0.5 * height, 1.5 * height
     xy = np.column_stack([np.tile(xs, ny), np.repeat(ys, nx)])
@@ -672,36 +791,47 @@ def slice_vtu(vtu, out_dir=None, **settings):
     vals = np.linalg.eigvalsh(sigma)
     refs = (float(np.percentile(np.clip(vals[:, -1], 0, None), PERCENTILE)),
             float(np.percentile(np.clip(vals[:, -1] - vals[:, -2], 0, None), PERCENTILE)))
-    cent = xy[tris].mean(axis=1)
-    e1, weight = sample_tension(np.column_stack([cent, np.full(len(cent), z_mid)]),
-                                fem_pts, sigma, refs)
     hits = column_hits(hull, xs, ys)
-    inside = np.clip(depth(hits, np.full(nx * ny, z_mid)) / cell, 0, 1)
-    weight *= inside[tris].mean(axis=1)
-    # Amplitudengrenze aus dem Schichthoehenfenster (src/printability.py)
-    thick = cfg["layer_max"] / h_nom - 1
-    thin = 1 - cfg["layer_min"] / (h_nom * math.cos(math.radians(cfg["max_tilt"])))
-    reach_dn, reach_up = z_mid, z_top - z_mid
-    s_dn = min(0.9 * reach_dn, thick * reach_up, thin * reach_dn)
-    s_up = min(0.9 * reach_up, thick * reach_dn, thin * reach_up)
-    s, tilt = warp_mid(xy, tris, e1, weight, np.full(nx * ny, -s_dn),
-                       np.full(nx * ny, s_up), cfg["max_tilt"])
     G, area = simplex_gradients(xy[tris])
-    q0 = alignment(np.zeros((len(tris), 2)), e1, weight, area)
+    # Amplitudengrenze aus dem Schichthoehenfenster (src/printability.py)
+    thick = h_max / h_nom - 1
+    thin = 1 - h_min / (h_nom * math.cos(math.radians(cfg["max_tilt"])))
+    reach_dn, reach_up = z_mid, z_top - z_mid
+    s_lo = np.full(nx * ny, -min(0.9 * reach_dn, thick * reach_up, thin * reach_dn))
+    s_hi = np.full(nx * ny, min(0.9 * reach_up, thick * reach_dn, thin * reach_up))
+    # Die Zugrichtung gilt dort, wo die Schicht liegt: jede Stufe tastet sie an der
+    # verformten Flaeche neu ab. Gedaempft, damit die Flaeche nicht hin- und herspringt;
+    # die Mischung zweier zulaessiger Versaetze bleibt zulaessig.
+    s = np.zeros(nx * ny)
+    for stage in range(1, MID_STAGES + 1):
+        progress.step(1, f"Stufe {stage} von {MID_STAGES}", (stage - 1) / MID_STAGES)
+        e1, weight = tension_on_surface(xy, tris, z_mid + s, fem_pts, sigma, refs, hits, cell)
+        if stage == 1:
+            q0 = alignment(np.zeros((len(tris), 2)), e1, weight, area)
+        s_new, tilt = warp_mid(xy, tris, e1, weight, s_lo, s_hi, cfg["max_tilt"])
+        change = float(np.abs(s_new - s).max())
+        print(f"   Stufe {stage}: Versatz {s_new.min():.2f} .. {s_new.max():.2f} mm "
+              f"(aendert sich um bis zu {change:.2f} mm)")
+        if change < 1e-3 * height:
+            break
+        s += MID_DAMPING * (s_new - s)
+    s = s_new
+    e1, weight = tension_on_surface(xy, tris, z_mid + s, fem_pts, sigma, refs, hits, cell)
     q1 = alignment(np.einsum("fij,fi->fj", G, s[tris]), e1, weight, area)
     print(f"   Versatz {s.min():.2f} .. {s.max():.2f} mm, Neigung max {tilt.max():.1f} Grad, "
           f"Zug in der Schicht {q0:.0%} -> {q1:.0%}")
     mid = z_mid + s.reshape(ny, nx)
 
-    print("3  Schichten aus dem Laplace-Feld")
+    progress.step(2, "unter der Mittelschicht", 0.0)
     n_dn = max(1, round(float(mid.mean()) / h_nom))
     n_up = max(1, round(float((z_top - mid).mean()) / h_nom))
-    layers = np.concatenate([
-        laplace_layers(xs, ys, np.zeros_like(mid), mid, np.arange(1, n_dn + 1) / n_dn, cell),
-        laplace_layers(xs, ys, mid, np.full_like(mid, z_top), np.arange(1, n_up + 1) / n_up, cell)])
+    below_mid = laplace_layers(xs, ys, np.zeros_like(mid), mid, np.arange(1, n_dn + 1) / n_dn, cell)
+    progress.step(2, "ueber der Mittelschicht", 0.5)
+    above_mid = laplace_layers(xs, ys, mid, np.full_like(mid, z_top), np.arange(1, n_up + 1) / n_up, cell)
+    layers = np.concatenate([below_mid, above_mid])
     layers = layers[layers.min(axis=(1, 2)) < height]
 
-    print("4  Schichten abschneiden, 5  Bahnen")
+    progress.step(3)
     step = 0.5 * w
     fx = np.arange(lo[0] - step, hi[0] + 2 * step, step)
     fy = np.arange(lo[1] - step, hi[1] + 2 * step, step)
@@ -710,6 +840,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
     printed, below, h_rng, pos = [], np.zeros((ny, nx)), [np.inf, 0.0], np.zeros(2)
     support, loose = None, []
     for k, layer in enumerate(layers):
+        progress.step(3, f"Schicht {k + 1} von {len(layers)}", k / len(layers))
         surf = RegularGridInterpolator((ys, xs), layer, bounds_error=False, fill_value=None)
         dz = RegularGridInterpolator((ys, xs), layer - below, bounds_error=False, fill_value=None)
         dist = np.clip(depth(fine_hits, surf(fine)), -step, step).reshape(len(fy), len(fx))
@@ -741,16 +872,15 @@ def slice_vtu(vtu, out_dir=None, **settings):
         raise InputError("Keine Schicht schneidet das Bauteil - ist die Datei leer?")
     print(f"   {len(printed)} Schichten, Dicke (senkrecht zur Schicht) "
           f"{h_rng[0]:.3f} .. {h_rng[1]:.3f} mm, Bahnbreite {w:.2f} mm")
-    if h_rng[0] < 0.95 * cfg["layer_min"] or h_rng[1] > 1.05 * cfg["layer_max"]:
-        print(f"   ACHTUNG: Schichtdicke ausserhalb des Fensters "
-              f"{cfg['layer_min']} .. {cfg['layer_max']} mm.")
+    if h_rng[0] < 0.95 * h_min or h_rng[1] > 1.05 * h_max:
+        print(f"   ACHTUNG: Schichtdicke ausserhalb des Fensters {h_min:.2f} .. {h_max:.2f} mm.")
     n_loose = sum(f > 0.05 for f in loose)
     if n_loose:
         print(f"   ACHTUNG: Ueberhang - in {n_loose} Schichten liegen bis zu {max(loose):.0%} "
               f"der Flaeche frei in der Luft. Ohne Stuetzen nicht druckbar; "
               f"andere Baurichtung waehlen.")
 
-    print("6  G-Code")
+    progress.step(4)
     nozzle_temp, bed_temp, fan, retract = MATERIALS[cfg["material"]]
     gc = GcodeWriter(w, h_nom, RETRACT * retract)
     gc.lines += [f"; LSI Lite - {vtu.name}",
@@ -758,6 +888,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
                  START_GCODE.format(nozzle_temp=nozzle_temp, bed_temp=bed_temp,
                                     purge_end=min(200, bed[1] - 20))]
     for k, (paths, surf) in enumerate(printed):
+        progress.step(4, f"Schicht {k + 1} von {len(printed)}", k / len(printed))
         gc.lines.append(f";LAYER:{k}")
         if k == FAN_OFF_LAYERS:
             gc.lines.append(f"M106 S{round(2.55 * fan)}")
@@ -773,6 +904,7 @@ def slice_vtu(vtu, out_dir=None, **settings):
     print(f"   {gcode.name}: {len(gc.lines)} Zeilen, Filament {meters:.1f} m "
           f"(etwa {meters * 2.98:.0f} g PLA), Druckzeit etwa {gc.seconds / 60:.0f} min "
           f"(ohne Beschleunigung, real laenger)")
+    progress.step(5)
     png = out_dir / f"{vtu.stem}_lite.png"
     strokes = tension_strokes(fem_pts, sigma, 2 * cell)
     preview(xs, ys, layers, mid, hits, strokes, cell, png)
@@ -792,10 +924,10 @@ def tension_strokes(points, sigma, length):
     return np.stack([points[tension] - e, points[tension] + e], axis=1)
 
 
-def show_paths(layer_paths, upto=None, strokes=None, max_points=300_000, max_strokes=2000):
-    """Drehbare 3D-Ansicht der Bahnen bis Schicht upto, optional mit Zugstrichen; duennt fuer den Browser aus."""
+def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
+    """Drehbare 3D-Ansicht aller Bahnen, optional mit Zugstrichen; duennt fuer den Browser aus."""
     import plotly.graph_objects as go
-    shown = layer_paths[:upto]
+    shown = layer_paths
     total = sum(len(P) for paths in shown for P in paths)
     step = max(1, -(-total // max_points))
     xyz, color = [], []
@@ -819,7 +951,7 @@ def show_paths(layer_paths, upto=None, strokes=None, max_points=300_000, max_str
                                  zaxis_title="z"),
                       margin=dict(l=0, r=0, t=30, b=0), height=600,
                       legend=dict(x=0, y=1),
-                      title=f"Bahnen der Schichten 1 bis {len(shown)}"
+                      title=f"Bahnen aller {len(shown)} Schichten"
                             + (f" (jeder {step}. Punkt)" if step > 1 else ""))
     return fig
 
@@ -827,8 +959,7 @@ def show_paths(layer_paths, upto=None, strokes=None, max_points=300_000, max_str
 def preview(xs, ys, layers, mid, hits, strokes, cell, png):
     """Vorschaubild: Schnitt durch Schichten und Zugrichtung, Auslenkung der Mittelschicht."""
     import matplotlib
-    if "ipykernel" not in sys.modules:
-        matplotlib.use("Agg")
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.collections import LineCollection
     j = len(ys) // 2
@@ -836,10 +967,9 @@ def preview(xs, ys, layers, mid, hits, strokes, cell, png):
     row_hits = (hits[0][row] % len(xs), hits[1][row])
     fig, (left, right) = plt.subplots(1, 2, figsize=(13, 4.2),
                                       gridspec_kw={"width_ratios": [1.6, 1]})
-    every = max(1, len(layers) // 40)
-    for layer in layers[::every]:
+    for layer in layers:
         z = layer[j]
-        left.plot(xs, np.where(depth(row_hits, z) > 0, z, np.nan), color="0.45", lw=0.6)
+        left.plot(xs, np.where(depth(row_hits, z) > 0, z, np.nan), color="0.45", lw=0.4)
     left.plot(xs, np.where(depth(row_hits, mid[j]) > 0, mid[j], np.nan), color="C3", lw=2,
               label="Mittelschicht")
     near = strokes[np.abs(strokes[:, :, 1].mean(axis=1) - ys[j]) < 0.5 * cell]
@@ -847,7 +977,7 @@ def preview(xs, ys, layers, mid, hits, strokes, cell, png):
     centre = near.mean(axis=1, keepdims=True)
     left.add_collection(LineCollection((centre + 0.5 * (near - centre))[:, :, [0, 2]],
                                        colors="C0", linewidths=1.0, label="Zugrichtung (sigma_1)"))
-    left.set(title=f"Schnitt bei y = {ys[j]:.1f} mm (jede {every}. Schicht)",
+    left.set(title=f"Schnitt bei y = {ys[j]:.1f} mm (alle {len(layers)} Schichten)",
              xlabel="x in mm", ylabel="z in mm", aspect="equal")
     left.legend(loc="upper center", bbox_to_anchor=(0.5, -0.42), ncol=2, frameon=False)
     im = right.imshow(mid - mid.mean(), origin="lower", cmap="coolwarm",
@@ -856,8 +986,6 @@ def preview(xs, ys, layers, mid, hits, strokes, cell, png):
     fig.colorbar(im, ax=right, label="mm", location="bottom", shrink=0.8)
     fig.tight_layout()
     fig.savefig(png, dpi=130)
-    if "ipykernel" in sys.modules:
-        plt.show()
     plt.close(fig)
 
 
