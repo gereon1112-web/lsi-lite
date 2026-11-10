@@ -173,8 +173,8 @@ def hull_triangles(tets):
     return faces[first[count == 1]]
 
 
-def place_on_bed(points, sigma, build_dir, bed):
-    """Dreht das Bauteil, bis die Baurichtung +z ist, und legt es mittig aufs Bett."""
+def place_on_bed(points, sigma, build_dir, bed, warn):
+    """Dreht das Bauteil, bis die Baurichtung +z ist, und legt es mittig aufs Bett; warn meldet Hinweise."""
     d = np.asarray(AXES[build_dir], dtype=float)
     helper = np.array([1.0, 0, 0]) if abs(d[0]) < 0.9 else np.array([0, 1.0, 0])
     ex = helper - (helper @ d) * d
@@ -183,8 +183,7 @@ def place_on_bed(points, sigma, build_dir, bed):
     p = points @ R.T
     sigma = np.einsum("ij,njk,lk->nil", R, sigma, R)
     if np.ptp(p, axis=0).max() < 1.0:
-        print("  Bauteil kleiner als 1 - vermutlich in Metern, wird mit 1000 "
-              "in Millimeter umgerechnet.")
+        warn("Bauteil kleiner als 1 - vermutlich in Metern, wird mit 1000 in Millimeter umgerechnet.")
         p *= 1000.0
     lo, hi = p.min(axis=0), p.max(axis=0)
     p -= [0.5 * (lo[0] + hi[0]) - 0.5 * bed[0], 0.5 * (lo[1] + hi[1]) - 0.5 * bed[1], lo[2]]
@@ -300,13 +299,13 @@ def solve_bounded(S, rhs, s_lo, s_hi, rounds=12):
     return np.clip(s, s_lo, s_hi), fixed
 
 
-def warp_mid(xy, tris, e1, weight, s_lo, s_hi, max_tilt):
+def warp_mid(xy, tris, e1, weight, s_lo, s_hi, max_tilt, warn):
     """Versatz s, der die Mittelschicht in die Zugrichtung legt (wie src/warp.py); Rueckgabe (s, Neigung)."""
     n = len(xy)
     G, area = simplex_gradients(xy[tris])
     w_typ = float(np.average(weight, weights=area))
     if w_typ < 1e-12:
-        print("  Keine Zugspannung im Bauteil - die Mittelschicht bleibt eben.")
+        warn("Keine Zugspannung im Bauteil - die Mittelschicht bleibt eben.")
         return np.zeros(n), np.zeros(len(tris))
     rows = np.repeat(np.arange(len(tris)), 3)
     A = sp.csr_matrix((np.einsum("fij,fj->fi", G, e1[:, :2]).ravel(),
@@ -329,7 +328,7 @@ def warp_mid(xy, tris, e1, weight, s_lo, s_hi, max_tilt):
     # Neigung eines Hoehenfelds waechst linear mit s: zulaessiger Anteil direkt
     gamma = min(1.0, math.tan(math.radians(max_tilt)) / max(slope.max(), 1e-12))
     if gamma < 1.0:
-        print(f"  Neigungsgrenze haelt erst mit {gamma:.0%} des Versatzes.")
+        warn(f"Neigungsgrenze haelt erst mit {gamma:.0%} des Versatzes.")
     return gamma * s, np.degrees(np.arctan(gamma * slope))
 
 
@@ -635,6 +634,7 @@ PROGRESS_CSS = """<style>
 .lsi .r{display:flex;gap:12px;padding:4px 0} .lsi small{opacity:.65} .lsi .wait{opacity:.5}
 .lsi .d{flex:0 0 22px;height:22px;line-height:22px;border-radius:50%;border:2px solid #8886;text-align:center;font-size:12px}
 .lsi .ok .d{background:#2e9d5b;border-color:#2e9d5b;color:#fff}
+.lsi .bad{color:#d64545} .lsi .bad .d{background:#d64545;border-color:#d64545;color:#fff}
 .lsi .run .d{border-color:#3b82f6;color:#3b82f6;animation:lsi 1.4s infinite}
 .lsi i{display:block;height:4px;margin-top:4px;border-radius:2px;background:#3b82f6}
 @keyframes lsi{0%{box-shadow:0 0 0 0 #3b82f680}70%{box-shadow:0 0 0 7px #3b82f600}}
@@ -646,16 +646,31 @@ class Progress:
 
     def __init__(self, title, show=None):
         self.title, self.show, self.current, self.starts = title, show, -1, []
+        self.notes, self.warnings = {}, []
 
     def step(self, k, detail="", share=None):
         """Schritt k (ab 0) laeuft; detail und share (0..1) sagen, wie weit er ist."""
         if k != self.current:
             self.current = k
             self.starts.append(time.perf_counter())
-            if k < len(STEPS):
+            if k < len(STEPS) and not self.show:
                 print(f"{k + 1}  {STEPS[k]}")
         if self.show:
             self.show(self.html(detail, share))
+
+    def say(self, text, note=False):
+        """Meldung: im Terminal als Zeile; im Notebook nur mit note, klein hinter dem Schritt."""
+        if not self.show:
+            print("   " + text)
+        elif note:
+            self.notes[self.current] = text
+
+    def warn(self, text):
+        """Warnung: im Terminal als ACHTUNG-Zeile, im Notebook rot unter der Schrittliste."""
+        if not self.show:
+            print("   ACHTUNG: " + text)
+        elif text not in self.warnings:
+            self.warnings.append(text)
 
     def html(self, detail, share):
         """Schrittliste: erledigt mit Haken und Dauer, laufend mit Balken, wartend blass."""
@@ -663,13 +678,16 @@ class Progress:
         for k, name in enumerate(STEPS):
             if k < self.current:
                 took = self.starts[k + 1] - self.starts[k]
-                rows.append(f'<div class="r ok"><b class="d">&#10003;</b>{name} <small>{took:.1f} s</small></div>')
+                note = f"<br><small>{escape(self.notes[k])}</small>" if k in self.notes else ""
+                rows.append(f'<div class="r ok"><b class="d">&#10003;</b>'
+                            f'<div>{name} <small>{took:.1f} s</small>{note}</div></div>')
             elif k == self.current:
                 bar = f'<i style="width:{100 * share:.0f}%"></i>' if share is not None else ""
                 rows.append(f'<div class="r run"><b class="d">{k + 1}</b>'
                             f'<div style="flex:1"><b>{name}</b> <small>{detail}</small>{bar}</div></div>')
             else:
                 rows.append(f'<div class="r wait"><b class="d">{k + 1}</b>{name}</div>')
+        rows += [f'<div class="r bad"><b class="d">!</b>{escape(w)}</div>' for w in self.warnings]
         total = time.perf_counter() - self.starts[0]
         return (f'{PROGRESS_CSS}<div class="lsi"><b>LSI Lite &middot; {escape(self.title)}</b> '
                 f'<small>{total:.0f} s</small>{"".join(rows)}</div>')
@@ -707,13 +725,12 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     bed = PRINTERS[cfg["printer"]]
     if cfg["build_dir"] == "auto":
         cfg["build_dir"] = next((d for f, d in EXAMPLES.values() if Path(f).name == vtu.name), "+z")
-        print(f"Baurichtung {cfg['build_dir']} (automatisch)")
-
-    print(f"Schichthoehe {h_min:.2f} .. {h_max:.2f} mm, Bahnbreite {w:.2f} mm "
-          f"(aus der Duese {cfg['nozzle']} mm)")
+        progress.say(f"Baurichtung {cfg['build_dir']} (automatisch)")
+    progress.say(f"Schichthoehe {h_min:.2f} .. {h_max:.2f} mm, Bahnbreite {w:.2f} mm "
+                 f"(aus der Duese {cfg['nozzle']} mm)")
     progress.step(0)
     fem_pts, sigma, tets = read_vtu(vtu)
-    fem_pts, sigma = place_on_bed(fem_pts, sigma, cfg["build_dir"], bed)
+    fem_pts, sigma = place_on_bed(fem_pts, sigma, cfg["build_dir"], bed, progress.warn)
     hull = fem_pts[hull_triangles(tets)]
     height = float(fem_pts[:, 2].max())
     lo, hi = fem_pts[:, :2].min(axis=0), fem_pts[:, :2].max(axis=0)
@@ -721,8 +738,8 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     xs = np.linspace(lo[0], hi[0], int(math.ceil((hi[0] - lo[0]) / cell)) + 1)
     ys = np.linspace(lo[1], hi[1], int(math.ceil((hi[1] - lo[1]) / cell)) + 1)
     nx, ny = len(xs), len(ys)
-    print(f"   {len(fem_pts)} FEM-Knoten, Bauteil {hi[0] - lo[0]:.1f} x {hi[1] - lo[1]:.1f}"
-          f" x {height:.1f} mm, Raster {nx} x {ny} ({cell:.2f} mm)")
+    progress.say(f"Bauteil {hi[0] - lo[0]:.0f} x {hi[1] - lo[1]:.0f} x {height:.0f} mm, Baurichtung "
+                 f"{cfg['build_dir']}, {len(fem_pts)} FEM-Knoten, Raster {nx} x {ny}", note=True)
 
     progress.step(1)
     # Quader wie im Original: doppelte Bauteilhoehe, Mittelschicht mittig, Bett unten
@@ -751,18 +768,18 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
         e1, weight = tension_on_surface(xy, tris, z_mid + s, fem_pts, sigma, refs, hits, cell)
         if stage == 1:
             q0 = alignment(np.zeros((len(tris), 2)), e1, weight, area)
-        s_new, tilt = warp_mid(xy, tris, e1, weight, s_lo, s_hi, cfg["max_tilt"])
+        s_new, tilt = warp_mid(xy, tris, e1, weight, s_lo, s_hi, cfg["max_tilt"], progress.warn)
         change = float(np.abs(s_new - s).max())
-        print(f"   Stufe {stage}: Versatz {s_new.min():.2f} .. {s_new.max():.2f} mm "
-              f"(aendert sich um bis zu {change:.2f} mm)")
+        progress.say(f"Stufe {stage}: Versatz {s_new.min():.2f} .. {s_new.max():.2f} mm "
+                     f"(aendert sich um bis zu {change:.2f} mm)")
         if change < 1e-3 * height:
             break
         s += MID_DAMPING * (s_new - s)
     s = s_new
     e1, weight = tension_on_surface(xy, tris, z_mid + s, fem_pts, sigma, refs, hits, cell)
     q1 = alignment(np.einsum("fij,fi->fj", G, s[tris]), e1, weight, area)
-    print(f"   Versatz {s.min():.2f} .. {s.max():.2f} mm, Neigung max {tilt.max():.1f} Grad, "
-          f"Zug in der Schicht {q0:.0%} -> {q1:.0%}")
+    progress.say(f"Zug in der Schicht {q0:.0%} -> {q1:.0%}, Neigung max {tilt.max():.1f} Grad, "
+                 f"Versatz {s.min():.1f} .. {s.max():.1f} mm", note=True)
     mid = z_mid + s.reshape(ny, nx)
 
     progress.step(2, "unter der Mittelschicht", 0.0)
@@ -813,15 +830,15 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
         printed.append((paths, surf))
     if not printed:
         raise InputError("Keine Schicht schneidet das Bauteil - ist die Datei leer?")
-    print(f"   {len(printed)} Schichten, Dicke (senkrecht zur Schicht) "
-          f"{h_rng[0]:.3f} .. {h_rng[1]:.3f} mm, Bahnbreite {w:.2f} mm")
+    progress.say(f"{len(printed)} Schichten, Dicke senkrecht zur Schicht "
+                 f"{h_rng[0]:.2f} .. {h_rng[1]:.2f} mm", note=True)
     if h_rng[0] < 0.95 * h_min or h_rng[1] > 1.05 * h_max:
-        print(f"   ACHTUNG: Schichtdicke ausserhalb des Fensters {h_min:.2f} .. {h_max:.2f} mm.")
+        progress.warn(f"Schichtdicke ausserhalb des Fensters {h_min:.2f} .. {h_max:.2f} mm - "
+                      f"Neigung senken.")
     n_loose = sum(f > 0.05 for f in loose)
     if n_loose:
-        print(f"   ACHTUNG: Ueberhang - in {n_loose} Schichten liegen bis zu {max(loose):.0%} "
-              f"der Flaeche frei in der Luft. Ohne Stuetzen nicht druckbar; "
-              f"andere Baurichtung waehlen.")
+        progress.warn(f"Ueberhang - in {n_loose} Schichten liegen bis zu {max(loose):.0%} der "
+                      f"Flaeche frei in der Luft. Ohne Stuetzen nicht druckbar; andere Baurichtung waehlen.")
 
     progress.step(4)
     nozzle_temp, bed_temp, fan, retract = MATERIALS[cfg["material"]]
@@ -844,9 +861,8 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     gcode = out_dir / f"{vtu.stem}_lite.gcode"
     gcode.write_text("\n".join(gc.lines) + "\n", encoding="utf-8")
     meters = gc.e_total / 1000
-    print(f"   {gcode.name}: {len(gc.lines)} Zeilen, Filament {meters:.1f} m "
-          f"(etwa {meters * 2.98:.0f} g PLA), Druckzeit etwa {gc.seconds / 60:.0f} min "
-          f"(ohne Beschleunigung, real laenger)")
+    progress.say(f"Filament {meters:.1f} m (etwa {meters * 2.98:.0f} g PLA), Druckzeit etwa "
+                 f"{gc.seconds / 60:.0f} min (ohne Beschleunigung)", note=True)
     progress.step(len(STEPS))
     strokes = tension_strokes(fem_pts, sigma, 2 * cell)
     return gcode, [[P for P, _ in paths] for paths, _ in printed], strokes

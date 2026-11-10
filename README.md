@@ -36,7 +36,7 @@ Python 3.12 oder neuer. Unter Windows nicht getestet.
 | --- | --- |
 | 1 Einrichten | Pakete und Programm laden |
 | 2 Eingabe | Beispiel (Tragwerk, Biegebalken) oder eigene `.vtu`: in Colab hochladen, lokal in `eingabe/` legen |
-| 3 Einstellungen und Rechnen | Werte setzen, ▶; eine Schrittliste zeigt den Fortschritt, darunter das Protokoll |
+| 3 Einstellungen und Rechnen | Werte setzen, ▶; eine Schrittliste zeigt Fortschritt, Ergebnisse und rot die Warnungen |
 | 4 Ansehen | alle Bahnen in 3D; schwarze Striche = Zugrichtung |
 | 5 Herunterladen | G-Code `<name>_lite.gcode` (lokal: Pfad, neben der `.vtu`) |
 
@@ -71,7 +71,7 @@ Tetraedernetz (C3D4 oder C3D10) mit Spannungstensor je Knoten, z. B. der VTU-Exp
 FreeCAD/CalculiX (Felder „Stress xx component“ usw.) oder ein Feld `stress` mit 6 oder 9
 Komponenten. Maße in mm (Meter werden erkannt). Die Unterseite muss in Baurichtung eben sein.
 
-## Warnungen im Protokoll
+## Warnungen
 
 | Meldung | was tun |
 | --- | --- |
