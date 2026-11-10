@@ -868,11 +868,10 @@ def tension_strokes(points, sigma, length):
 def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
     """Drehbare 3D-Ansicht aller Bahnen, optional mit Zugstrichen; duennt fuer den Browser aus."""
     import plotly.graph_objects as go
-    shown = layer_paths
-    total = sum(len(P) for paths in shown for P in paths)
+    total = sum(len(P) for paths in layer_paths for P in paths)
     step = max(1, -(-total // max_points))
     xyz, color = [], []
-    for k, paths in enumerate(shown):
+    for k, paths in enumerate(layer_paths):
         for P in paths:
             pts = np.vstack([P[::step], P[-1:], [[np.nan] * 3]])
             xyz.append(pts)
@@ -883,8 +882,7 @@ def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
         line=dict(color=color, colorscale="Turbo", width=2,
                   colorbar=dict(title="Schicht", x=1.0))))
     if strokes is not None and len(strokes):
-        s = strokes[strokes[:, :, 2].mean(axis=1) <= np.nanmax(xyz[:, 2])]
-        s = s[::max(1, len(s) // max_strokes)]
+        s = strokes[::max(1, len(strokes) // max_strokes)]
         s = np.concatenate([s, np.full((len(s), 1, 3), np.nan)], axis=1).reshape(-1, 3)
         fig.add_trace(go.Scatter3d(x=s[:, 0], y=s[:, 1], z=s[:, 2], mode="lines",
                                    name="Zugrichtung (sigma_1)", line=dict(color="black", width=3)))
@@ -892,7 +890,7 @@ def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
                                  zaxis_title="z"),
                       margin=dict(l=0, r=0, t=30, b=0), height=600,
                       legend=dict(x=0, y=1),
-                      title=f"Bahnen aller {len(shown)} Schichten"
+                      title=f"Bahnen aller {len(layer_paths)} Schichten"
                             + (f" (jeder {step}. Punkt)" if step > 1 else ""))
     return fig
 
