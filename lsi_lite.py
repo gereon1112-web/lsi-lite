@@ -859,9 +859,10 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
                  f"{gc.seconds / 60:.0f} min (ohne Beschleunigung)", note=True)
     progress.step(len(STEPS))
     strokes = tension_strokes(fem_pts, sigma, 2 * cell)
-    # Mittelschicht nur im Bauteil zeigen: (xs, ys, z), ausserhalb NaN
-    mid_in = np.where(depth(hits, mid.ravel()).reshape(ny, nx) > 0, mid, np.nan)
-    return gcode, [[P for P, _ in paths] for paths, _ in printed], strokes, (xs, ys, mid_in)
+    # Mittelschicht auf dem feinen Raster, nur im Bauteil: (x, y, z), ausserhalb NaN
+    mid_f = RegularGridInterpolator((ys, xs), mid, bounds_error=False, fill_value=None)(fine)
+    mid_in = np.where(depth(fine_hits, mid_f) > 0, mid_f, np.nan).reshape(len(fy), len(fx))
+    return gcode, [[P for P, _ in paths] for paths, _ in printed], strokes, (fx, fy, mid_in)
 
 
 def tension_strokes(points, sigma, length):
@@ -903,7 +904,7 @@ def show_paths(layer_paths, strokes=None, mid=None, max_points=300_000, max_stro
     if mid is not None:
         fig.add_trace(go.Surface(x=mid[0], y=mid[1], z=mid[2], name="Mittelschicht",
                                  visible="legendonly", showlegend=True, showscale=False,
-                                 colorscale=[[0, "grey"], [1, "grey"]], opacity=0.6))
+                                 colorscale=[[0, "magenta"], [1, "magenta"]]))
     fig.update_layout(scene=dict(aspectmode="data", xaxis_title="x", yaxis_title="y",
                                  zaxis_title="z"),
                       margin=dict(l=0, r=0, t=30, b=0), height=600,
