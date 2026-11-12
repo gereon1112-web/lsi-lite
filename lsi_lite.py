@@ -712,7 +712,7 @@ def check_settings(cfg):
 
 
 def slice_vtu(vtu, out_dir=None, show=None, **settings):
-    """Rechnet den G-Code; Rueckgabe (G-Code, Bahnen je Schicht, Zugstriche).
+    """Rechnet den G-Code; Rueckgabe (G-Code, Bahnen je Schicht, Zugstriche, Mittelschicht).
 
     show: Funktion, die die Schrittliste als HTML entgegennimmt (Notebook), sonst None.
     """
@@ -859,7 +859,9 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
                  f"{gc.seconds / 60:.0f} min (ohne Beschleunigung)", note=True)
     progress.step(len(STEPS))
     strokes = tension_strokes(fem_pts, sigma, 2 * cell)
-    return gcode, [[P for P, _ in paths] for paths, _ in printed], strokes
+    # Mittelschicht nur im Bauteil zeigen: (xs, ys, z), ausserhalb NaN
+    mid_in = np.where(depth(hits, mid.ravel()).reshape(ny, nx) > 0, mid, np.nan)
+    return gcode, [[P for P, _ in paths] for paths, _ in printed], strokes, (xs, ys, mid_in)
 
 
 def tension_strokes(points, sigma, length):
@@ -875,8 +877,9 @@ def tension_strokes(points, sigma, length):
     return np.stack([points[tension] - e, points[tension] + e], axis=1)
 
 
-def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
-    """Drehbare 3D-Ansicht aller Bahnen, optional mit Zugstrichen; duennt fuer den Browser aus."""
+def show_paths(layer_paths, strokes=None, mid=None, max_points=300_000, max_strokes=2000):
+    """Drehbare 3D-Ansicht aller Bahnen, optional mit Zugstrichen und Mittelschicht (beide
+    zunaechst ausgeblendet, Klick auf die Legende blendet ein); duennt fuer den Browser aus."""
     import plotly.graph_objects as go
     total = sum(len(P) for paths in layer_paths for P in paths)
     step = max(1, -(-total // max_points))
@@ -895,7 +898,12 @@ def show_paths(layer_paths, strokes=None, max_points=300_000, max_strokes=2000):
         s = strokes[::max(1, len(strokes) // max_strokes)]
         s = np.concatenate([s, np.full((len(s), 1, 3), np.nan)], axis=1).reshape(-1, 3)
         fig.add_trace(go.Scatter3d(x=s[:, 0], y=s[:, 1], z=s[:, 2], mode="lines",
-                                   name="Zugrichtung (sigma_1)", line=dict(color="black", width=3)))
+                                   name="Zugrichtung (sigma_1)", visible="legendonly",
+                                   line=dict(color="black", width=3)))
+    if mid is not None:
+        fig.add_trace(go.Surface(x=mid[0], y=mid[1], z=mid[2], name="Mittelschicht",
+                                 visible="legendonly", showlegend=True, showscale=False,
+                                 colorscale=[[0, "grey"], [1, "grey"]], opacity=0.6))
     fig.update_layout(scene=dict(aspectmode="data", xaxis_title="x", yaxis_title="y",
                                  zaxis_title="z"),
                       margin=dict(l=0, r=0, t=30, b=0), height=600,
@@ -924,7 +932,7 @@ def main():
     parser.add_argument("vtu", nargs="?", help="FEM-Ergebnis (Vorgabe: die Datei in eingabe/)")
     args = parser.parse_args()
     try:
-        gcode, _, _ = slice_vtu(Path(args.vtu) if args.vtu else default_input())
+        gcode, *_ = slice_vtu(Path(args.vtu) if args.vtu else default_input())
     except InputError as err:
         sys.exit(f"Abbruch: {err}")
     print(f"Fertig: {gcode}")
