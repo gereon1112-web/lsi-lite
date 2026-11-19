@@ -27,7 +27,12 @@ vereinfacht ist. Messwerte stehen in [ergebnisse.md](ergebnisse.md), Gründe in
    seiner Nachbarn (Laplace-Gleichung, lineare finite Elemente). Die Schichten sind die
    Flächen gleichen u-Werts: Sie können sich nicht schneiden, und Knicke der
    Mittelschicht runden sich zu Boden und Deckel hin ab.
-4. **Abschneiden und Fenster erzwingen.** Jede Schicht wird am Bauteil beschnitten. Jeder
+4. **Abschneiden und Fenster erzwingen.** Jede Schicht wird am Bauteil beschnitten: Innen
+   oder außen entscheidet ein Zähltest je Punkt eines feinen Rasters (halbe Bahnbreite),
+   der Rand liegt dort, wo der Abstand zur Hülle null wird. Nahe am Rand ist das der echte
+   Abstand zum nächsten Hülldreieck (`exact_at_edge`), sonst der senkrechte; wie beim
+   Durchstoßen der Hülle im LSI liegt der Rand so auf der Bauteilwand statt als Treppe
+   entlang des Rasters. Jeder
    Punkt liegt dabei mindestens die kleinste Schichthöhe (senkrecht zur Schicht) und
    höchstens die größte über dem, was wirklich darunter liegt: dem Bett oder der zuletzt
    gedruckten Schicht. Wo eine gekrümmte Schicht das Bett schräg schneidet, wäre der

@@ -10,5 +10,5 @@ Hintergrund zu LSI Lite; wie man es benutzt, steht im [Haupt-README](../README.m
 | wissen, warum es so gebaut ist | [entscheidungen.md](entscheidungen.md) |
 
 - **verfahren.md**: die sechs Schritte von FEM-Ergebnis bis G-Code und die Vereinfachungen gegenüber dem LSI.
-- **ergebnisse.md**: Vergleich mit dem Original, Wirkung der 5 Stufen, Versuch mit freier Unterseite, Nachglätten der Mittelschicht.
+- **ergebnisse.md**: Vergleich mit dem Original, Wirkung der 5 Stufen, Versuch mit freier Unterseite, Nachglätten der Mittelschicht, Schichtrand am echten Abstand.
 - **entscheidungen.md**: Entscheidungen mit verworfenen Wegen.

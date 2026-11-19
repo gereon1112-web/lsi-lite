@@ -240,6 +240,47 @@ def depth(hits, z):
     return np.where((pos - start) % 2 == 1, d, -d)
 
 
+def hull_distance(hull):
+    """Funktion, die fuer Punkte (n, 3) den Abstand zum naechsten Huelldreieck liefert (ohne Vorzeichen)."""
+    from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray, vtk_to_numpy
+    from vtkmodules.vtkCommonCore import vtkDoubleArray, vtkPoints
+    from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
+    from vtkmodules.vtkFiltersCore import vtkImplicitPolyDataDistance
+    points = vtkPoints()
+    points.SetData(numpy_to_vtk(hull.reshape(-1, 3), deep=True))
+    cells = vtkCellArray()
+    cells.SetData(numpy_to_vtkIdTypeArray(np.arange(0, 3 * len(hull) + 1, 3), deep=True),
+                  numpy_to_vtkIdTypeArray(np.arange(3 * len(hull)), deep=True))
+    surface = vtkPolyData()
+    surface.SetPoints(points)
+    surface.SetPolys(cells)
+    distance = vtkImplicitPolyDataDistance()
+    distance.SetInput(surface)
+
+    def query(p):
+        out = vtkDoubleArray()
+        distance.FunctionValue(numpy_to_vtk(np.asarray(p, dtype=float), deep=True), out)
+        return np.abs(vtk_to_numpy(out))
+    return query
+
+
+def exact_at_edge(d, points, distance_to_hull, limit):
+    """Ersetzt d dort, wo ein Rasternachbar auf der anderen Seite der Huelle liegt, durch den echten Abstand.
+
+    Der senkrechte Abstand springt an senkrechten Waenden; die Konturlinie laege dann
+    immer mittig zwischen zwei Rasterpunkten, und schraege Waende wuerden zur Treppe.
+    """
+    inside = d > 0
+    edge = np.zeros(d.shape, dtype=bool)
+    for flip, a, b in ((inside[:, 1:] != inside[:, :-1], np.s_[:, 1:], np.s_[:, :-1]),
+                       (inside[1:] != inside[:-1], np.s_[1:], np.s_[:-1])):
+        edge[a] |= flip
+        edge[b] |= flip
+    d = d.copy()
+    d[edge] = np.where(inside[edge], 1.0, -1.0) * np.minimum(distance_to_hull(points[edge.ravel()]), limit)
+    return d
+
+
 # --- FINITE ELEMENTE (gebraucht von 2 und 3) ---
 
 def simplex_gradients(P):
@@ -803,6 +844,7 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
     fy = np.arange(lo[1] - step, hi[1] + 2 * step, step)
     fine = np.stack(np.meshgrid(fy, fx, indexing="ij"), axis=-1).reshape(-1, 2)
     fine_hits = column_hits(hull, fx, fy)
+    distance_to_hull = hull_distance(hull)
     printed, below, h_rng, pos = [], np.zeros((ny, nx)), [np.inf, 0.0], np.zeros(2)
     for k, layer in enumerate(layers):
         progress.step(3, f"Schicht {k + 1} von {len(layers)}", k / len(layers))
@@ -815,7 +857,9 @@ def slice_vtu(vtu, out_dir=None, show=None, **settings):
         surf = RegularGridInterpolator((ys, xs), fits, bounds_error=False, fill_value=None)
         dz = RegularGridInterpolator((ys, xs), thick_k, bounds_error=False, fill_value=None)
         inside = RegularGridInterpolator((ys, xs), layer, bounds_error=False, fill_value=None)
-        dist = np.clip(depth(fine_hits, inside(fine)), -step, step).reshape(len(fy), len(fx))
+        z_fine = inside(fine)
+        dist = np.clip(depth(fine_hits, z_fine), -step, step).reshape(len(fy), len(fx))
+        dist = exact_at_edge(dist, np.column_stack([fine[:, ::-1], z_fine]), distance_to_hull, step)
         region = outline(fx, fy, dist).simplify(0.05 * w)
         below = np.where(layer > below, fits, below)
         if region.area < w * w:

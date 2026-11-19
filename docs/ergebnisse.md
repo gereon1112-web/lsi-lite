@@ -70,3 +70,21 @@ Die Düse ändert an der Mittelschicht nichts (gleiche Werte bei 0.4 und 1 mm). 
 Neigungsgrenze wird nach dem Glätten nicht mehr ausgeschöpft; die Fläche ist runder,
 nicht flacher in der Ausrichtung.
 
+## Schichtrand am echten Abstand (2026-11-19)
+
+Tragwerk, Neigung 25°, mittlere Hälfte der Schichten. Gemessen ist, wie weit die
+Außenwand vom Sollabstand (halbe Bahnbreite zur Hülle) abweicht.
+
+| | Abweichung Median / 95 % | Umrisspunkte aller Schichten | Rechenzeit (Düse 0.4) |
+| --- | --- | --- | --- |
+| Düse 1, vorher | 0.18 / 0.50 mm | | |
+| Düse 1, nachher | 0.02 / 0.61 mm | | |
+| Düse 0.4, vorher | 0.08 / 0.15 mm | 36 761 | 40 s, davon 26 s Bahnen legen |
+| Düse 0.4, nachher | 0.00 / 0.23 mm | 11 864 | 13 s, davon 1 s Bahnen legen |
+
+Entlang der Wände liegt die Bahn jetzt auf dem Sollabstand. Das 95. Perzentil steigt, weil
+an Ecken und Armspitzen der Abstand zur Hülle vom Sollwert abweicht (die Wand rundet die
+Ecke ab); die alte Treppe hatte dort zufällig ähnliche Werte. Die Beschleunigung kommt aus
+dem Bahnenlegen: Das wiederholte Einrücken der Umrisse für die konzentrische Füllung ist
+bei treppigen Umrissen mit dreimal so vielen Punkten viel teurer.
+

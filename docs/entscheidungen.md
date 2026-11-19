@@ -25,6 +25,20 @@ Warum LSI Lite so gebaut ist, je Entscheidung mit verworfenen Wegen. Messwerte s
   verlassen werden.
 - **Dazu:** Überhangprüfung entfernt (auf Wunsch; die Baurichtung wählt der Nutzer).
 
+## Schichtrand am echten Abstand zur Hülle (2026-11-19)
+
+- **Problem:** Die Schichtränder waren an schrägen Wänden treppig, mit der Weite des
+  feinen Rasters (0,875 mm bei Düse 1); im LSI sind sie glatt. Ursache: Der Rand wurde am
+  senkrechten Abstand zur Hülle gesucht. Der springt an einer senkrechten Wand von „innen“
+  auf „außen“, die Konturlinie landete deshalb immer mittig zwischen zwei Rasterpunkten.
+- **Verworfen:** feineres Raster (Treppe nur kleiner, Rechenzeit größer); Randpunkte
+  nachträglich per Bisektion auf die Wand schieben (mehr Code für dasselbe Ergebnis);
+  vorzeichenbehafteter Abstand wie im LSI (das Vorzeichen hängt an der Ausrichtung der
+  Hülle, der Zähltest ist robuster).
+- **Gewählt:** nur an Rasterpunkten mit Nachbar auf der anderen Seite den echten Abstand
+  zum nächsten Hülldreieck (VTK, schon Abhängigkeit) einsetzen, Vorzeichen aus dem
+  Zähltest. Nebenbei viermal schneller: glatte Umrisse haben ein Drittel der Punkte.
+
 ## Mittelschicht nachglätten (2026-11-19)
 
 - **Problem:** Die Mittelschicht zeigte scharfe Grate und Zacken auf Rastergröße, im
