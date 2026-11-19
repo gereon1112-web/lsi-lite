@@ -18,6 +18,10 @@ vereinfacht ist. Messwerte stehen in [ergebnisse.md](ergebnisse.md), Gründe in
    abgelesen, wo die Fläche inzwischen liegt. Jede Stufe übernimmt die Hälfte der neuen
    Verformung (`MID_DAMPING`), damit die Fläche nicht hin- und herspringt; das Ergebnis
    ist die Lösung der letzten Stufe. Wie `MID_RESAMPLE_ROUNDS` im LSI.
+   Zum Schluss wird die Fläche einmal implizit geglättet (`MID_SMOOTHING`, nicht im
+   Original): Die Neigungsgrenze versteift einzelne Dreiecke, und wo steife an weiche
+   grenzen, knickt die Fläche; das Glätten rundet diese Zacken ab
+   ([ergebnisse.md](ergebnisse.md#mittelschicht-nachgeglättet-2026-11-19)).
 3. **Schichten dazwischen** (`laplace_layers`). Ein Feld u ist 0 auf dem Quaderboden, 1 auf der
    Mittelschicht (bzw. Mittelschicht und Deckel); dazwischen ist jeder Punkt das Mittel
    seiner Nachbarn (Laplace-Gleichung, lineare finite Elemente). Die Schichten sind die
@@ -52,6 +56,7 @@ angedrückt (wie im LSI). Bei 0.4 mm: Schicht 0.10 bis 0.30 mm, Bahn 0.70 mm.
 | Füllarten | konzentrisch, zigzag, lastgeführt (explizit, implizit) | konzentrisch, zigzag, explizit |
 | Drucker | 3-Achs und 6-Achs-Roboter (RAPID), Draht | nur 3-Achs |
 | Wände | Anzahl einstellbar | eine |
+| Mittelschicht | wie berechnet | zum Schluss geglättet (`MID_SMOOTHING`) |
 | Prüfungen | Druckbarkeitskriterien K1 bis K7 | Schichthöhenfenster (erzwungen), Bettgröße; kein Überhang |
 
 **Neigungsgrenze.** Die Herleitung (kleinerer Winkel aus Düsenkegel und Schlitten über

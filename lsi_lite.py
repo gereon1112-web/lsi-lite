@@ -85,6 +85,7 @@ MATERIALS = {
 GRID_DIVISIONS = 60         # Rasterweite = groesste Ausdehnung / 60
 LAYER_RATIO = (0.25, 0.75)  # Schichthoehe min, max als Vielfaches der Duese (Faustregel)
 FREEDOM = 1e-2              # Restglaettung der Mittelschicht
+MID_SMOOTHING = 2.0         # Nachglaettung der Mittelschicht, in Rasterzellen-Flaechen (nicht im Original)
 MID_STAGES = 5              # Stufen: Zugrichtung an der verformten Mittelschicht neu abtasten
 MID_DAMPING = 0.5           # Anteil, zu dem jede Stufe den neuen Versatz uebernimmt
 OUTER_ITERS = 80            # Runden fuer Neigungs- und Amplitudengrenze
@@ -324,6 +325,11 @@ def warp_mid(xy, tris, e1, weight, s_lo, s_hi, max_tilt, warn):
         if not viol.any():
             break
         lam[viol] = np.minimum(lam[viol] * TILT_GROWTH, cap)
+    # Die Neigungsgrenze versteift einzelne Dreiecke; wo steife an weiche grenzen, knickt
+    # die Flaeche. Implizit glaetten (wie ein Waermeschritt) rundet diese Zacken ab.
+    smooth = mass + MID_SMOOTHING * 2.0 * float(area.mean()) * stiffness(tris, G, area, n)
+    s = spla.spsolve(smooth.tocsc(), mass @ s)
+    slope = np.linalg.norm(np.einsum("fij,fi->fj", G, s[tris]), axis=1)
     # Neigung eines Hoehenfelds waechst linear mit s: zulaessiger Anteil direkt
     gamma = min(1.0, math.tan(math.radians(max_tilt)) / max(slope.max(), 1e-12))
     if gamma < 1.0:

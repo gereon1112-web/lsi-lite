@@ -25,6 +25,20 @@ Warum LSI Lite so gebaut ist, je Entscheidung mit verworfenen Wegen. Messwerte s
   verlassen werden.
 - **Dazu:** Überhangprüfung entfernt (auf Wunsch; die Baurichtung wählt der Nutzer).
 
+## Mittelschicht nachglätten (2026-11-19)
+
+- **Problem:** Die Mittelschicht zeigte scharfe Grate und Zacken auf Rastergröße, im
+  Tragwerk mit Düse 1 mm gut sichtbar. Ursache: Die Neigungsgrenze versteift einzelne
+  Dreiecke; wo steife an weiche grenzen, knickt die Fläche.
+- **Verworfen:** stärkere Grundglättung `FREEDOM` (Knicke kaum kleiner, weniger Zug in der
+  Schicht); die Versteifung auf Nachbardreiecke verteilen (wirkungslos); eine einzige
+  Steifigkeit für die ganze Fläche (Zug in der Schicht 91 statt 96 %); den Versatz
+  gleichmäßig verkleinern statt je Knoten zu begrenzen (die Höhenbegrenzung greift hier
+  gar nicht).
+- **Gewählt:** nach dem Lösen ein impliziter Glättschritt über etwa 1,4 Rasterweiten. Er
+  behandelt das Ergebnis, nicht die Versteifung selbst, ist aber der einzige gemessene
+  Weg, der die Knicke deutlich verkleinert und die Ausrichtung nicht verschlechtert.
+
 ## Schichthöhe aus der Düse (2026-11-10)
 
 - **Gewählt:** 25 bis 75 % des Düsendurchmessers statt zwei freier Felder; eine

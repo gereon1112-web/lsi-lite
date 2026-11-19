@@ -51,3 +51,22 @@ zusätzlich der Zug über **alle** Schichten im Bauteil, nicht nur in der Mittel
 Die Mittelschicht darf weiter ausweichen (Biegebalken −5.2 statt −3.5 mm); über das ganze
 Bauteil ändert sich wenig. Die Schichtdicke bleibt jetzt im Fenster, vorher reichte sie
 beim Tragwerk bis 0.33 mm.
+
+## Mittelschicht nachgeglättet (2026-11-19)
+
+Knick = Änderung der Steigung von einem Rasterknoten zum nächsten, als Höhe in mm
+(zweite Differenz des Versatzes entlang x); 99. Perzentil und größter Wert.
+
+| | Zug in der Mittelschicht | Neigung max | Knick 99 % / max |
+| --- | --- | --- | --- |
+| Tragwerk, Düse 1, 25°, vorher | 82 % → 96 % | 25.0° | 0.79 / 1.32 mm |
+| Tragwerk, Düse 1, 25°, geglättet | 82 % → 98 % | 16.3° | 0.26 / 0.47 mm |
+| Tragwerk, 20°, vorher | 82 % → 96 % | 20.0° | 0.67 / 1.25 mm |
+| Tragwerk, 20°, geglättet | 82 % → 98 % | 16.0° | 0.24 / 0.38 mm |
+| Biegebalken, 20°, vorher | 21 % → 83 % | 19.8° | 0.38 / 0.51 mm |
+| Biegebalken, 20°, geglättet | 21 % → 83 % | 15.4° | 0.15 / 0.17 mm |
+
+Die Düse ändert an der Mittelschicht nichts (gleiche Werte bei 0.4 und 1 mm). Die
+Neigungsgrenze wird nach dem Glätten nicht mehr ausgeschöpft; die Fläche ist runder,
+nicht flacher in der Ausrichtung.
+
