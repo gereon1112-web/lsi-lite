@@ -50,6 +50,21 @@ gleichmäßig, darüber drückt die Düse den Strang nicht mehr an. Die Bahnbrei
 plus größte Schichthöhe: An der dicksten Stelle liegt der Strang frei, sonst wird er
 angedrückt (wie im LSI). Bei 0.4 mm: Schicht 0.10 bis 0.30 mm, Bahn 0.70 mm.
 
+## Wo es im Code steht
+
+`lsi_lite.py` enthält den Ablauf (`slice_vtu`), den das Notebook aufruft; die
+Schritte liegen im Ordner `bausteine/`. Keine Datei dort ruft eine andere auf, außer
+`bauteil.py`, das die übrigen für Innen/Außen und die Zugrichtung fragen.
+
+| Datei | Inhalt |
+| --- | --- |
+| `bausteine/config.py` | Drucker, Material, Start-/End-G-Code, feste Werte |
+| `bausteine/bauteil.py` | VTU lesen, aufs Bett legen, innen/außen, Zugrichtung abtasten |
+| `bausteine/schichten.py` | Schritte 2 und 3: Mittelschicht, Laplace-Schichten |
+| `bausteine/bahnen.py` | Schritte 4 und 5: Umriss, Wand, Füllung, Reihenfolge |
+| `bausteine/gcode.py` | Schritt 6: Menge, Vorschub, Leerfahrten |
+| `bausteine/ansicht.py` | Fortschrittsanzeige, 3D-Ansicht im Notebook |
+
 ## Was vereinfacht ist
 
 | Teil | Original (LSI) | Lite |

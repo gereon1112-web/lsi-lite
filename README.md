@@ -25,23 +25,16 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt      # Windows
 ```
 
-Anschließend `LSI_lite.ipynb` in VS Code mit der Jupyter-Erweiterung öffnen oder das
-Skript direkt aufrufen:
-
-```
-.venv/bin/python lsi_lite.py teil.vtu              # Linux
-.venv\Scripts\python lsi_lite.py teil.vtu          # Windows
-```
-
-Ohne Pfadangabe wird die `.vtu` aus `eingabe/` verwendet. Unter Windows ist der Ablauf
-nicht getestet.
+Anschließend `LSI_lite.ipynb` in VS Code mit der Jupyter-Erweiterung öffnen und als
+Kernel die Umgebung `.venv` wählen. Eigene Bauteile kommen als `.vtu` in den Ordner
+`eingabe/`. Unter Windows ist der Ablauf nicht getestet.
 
 ## Einstellungen
 
 Einstellbar sind Düsendurchmesser (Vorgabe 0,4 mm), Füllmuster (konzentrisch, Zickzack
 oder entlang der Zugrichtung), Fülldichte, Drucker, Material und Baurichtung.
 
-Maßgeblich ist `neigung_max` (im Skript `max_tilt`), die zulässige Schichtneigung
+Maßgeblich ist `neigung_max` (im Code `max_tilt`), die zulässige Schichtneigung
 (Vorgabe 20°). Da die Düse
 stets senkrecht steht, kollidiert der Heizblock bei zu steilen Schichten mit bereits
 gedrucktem Material. Der Wert sollte daher kleiner sein als der Flankenwinkel des

@@ -67,9 +67,27 @@ Warum LSI Lite so gebaut ist, je Entscheidung mit verworfenen Wegen. Messwerte s
   gleich, wirkte in Colab aber fremd, und VS Code zeigte sie mit einer veralteten
   Jupyter-Erweiterung nicht an.
 
+## Programm in Bausteine aufgeteilt (2026-11-20)
+
+- **Problem:** eine Datei mit knapp 1000 Zeilen; wer einen Schritt ändern will, muss
+  sich durch alle anderen lesen.
+- **Gewählt:** `lsi_lite.py` als einziges Programm im Projektordner, die Schritte als
+  sechs Dateien in `bausteine/`
+  ([Wo es im Code steht](verfahren.md#wo-es-im-code-steht)). Der G-Code beider Beispiele
+  ist danach byte-gleich. Kosten: rund 30 Zeilen für Importe und Dateiköpfe.
+- **Verworfen:** alle Dateien flach neben dem README (der Einstieg ist dann nicht
+  erkennbar); Ordner namens `lsi_lite/` (gleicher Importname wie `lsi_lite.py`, Python
+  nähme still den Ordner); den Ablauf ins Notebook verlegen (Code statt Formular in
+  Colab, Änderungen im JSON kaum lesbar); `src/`
+  oder ein installierbares Paket (mehr Aufwand beim Laden in Colab, nichts gewonnen).
+- **Dazu:** Start von der Kommandozeile (`main`, argparse) gestrichen; LSI Lite wird nur
+  über das Notebook benutzt.
+- **Dazu:** Was das Notebook-Formular schon festlegt, wird im Code nicht noch einmal
+  vorgegeben oder geprüft (`SETTINGS` und die Prüfung der Auswahllisten gestrichen).
+
 ## Weitergabe (2026-11-08)
 
-- **Gewählt:** eigenes öffentliches Repo; das Colab-Notebook lädt `lsi_lite.py` über die
-  raw-URL.
+- **Gewählt:** eigenes öffentliches Repo; das Colab-Notebook lädt die Programmdateien über
+  die raw-URL.
 - **Verworfen:** Gist (keine Versionen), Code nur im Notebook (schwer zu pflegen), PyPI
   (zu viel Aufwand).
